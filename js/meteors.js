@@ -7,7 +7,7 @@ import {surface} from './terrain.js';
 import {mulberry32,clamp,lerp,smoothstep,CAR_SIZE_MUL} from './utils.js';
 
 export const MAX_METEORS=140;     // meteoros simultâneos no céu (teto absoluto do pool)
-export const SPEED_MUL=.84,RATE_MUL=.9;   // meteoros ~16 % mais lentos (tempo de queda ÷ SPEED_MUL; trajetória/ângulo iguais) e ~10 % menos frequentes (intervalo entre spawns ÷ RATE_MUL)
+export const SPEED_MUL=.672,RATE_MUL=.72;   // meteoros mais 20 % mais lentos (.84→.672; tempo de queda ÷ SPEED_MUL; trajetória/ângulo iguais) e mais 20 % menos frequentes (.9→.72; intervalo entre spawns ÷ RATE_MUL)
 const SPAWN_GAP=[.17,.036];       // intervalo médio entre spawns (s) em dificuldade 0 → 1   (antes .44 → .096)
 const SIM=[36,110];               // máx. de meteoros simultâneos em dificuldade 0 → 1      (antes 20 → 60; sempre < MAX_METEORS: sobra vaga p/ o meteoro de punição)
 const FALL=[2.6,1.7];             // tempo médio de queda (s) em dificuldade 0 → 1          (antes 4.6 → 3.0)

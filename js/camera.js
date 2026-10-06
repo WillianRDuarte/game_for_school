@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import {lerp} from './utils.js';
 import {surface} from './terrain.js';
-const ZOOM=.8;   // câmera ~20 % mais perto do carro: posição e alvo do olhar são escalados em torno do carro → mesmo ângulo/enquadramento, só mais próximo
+const ZOOM=.64;   // câmera mais 20 % perto do carro (.8→.64): posição e alvo do olhar escalados em torno do carro → mesmo ângulo/enquadramento
 export class CameraRig{
   constructor(cam,player){this.cam=cam;this.p=player;this.pos=new THREE.Vector3();this.look=new THREE.Vector3();this.lk=new THREE.Vector3();this.h=0;this.ly=0;this.init=false;this.g=({});}
   update(dt){

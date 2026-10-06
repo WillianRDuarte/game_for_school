@@ -133,3 +133,6 @@ Testes: `node --import ./tests/register.mjs tests/scenery_test.mjs` (QUICK=1 enc
 - `js/camera.js`: `ZOOM=.8` — a posição final da câmera e o alvo do olhar são escalados em torno do carro (≈20 % mais perto, mesmo ângulo/enquadramento; o estado suavizado do rig não muda).
 - `js/meteors.js`: `SPEED_MUL=.84` (tempo de queda ÷ .84 → velocidade ≈ −16 %; mesma trajetória/ângulo; mira em NPC/perk e indicadores usam o novo T) e `RATE_MUL=.9` (intervalo entre spawns ÷ .9 → ≈ −10 % de meteoros/impactos por segundo). Meteoro de punição (zona letal, `LETHAL_T`) e limite simultâneo (`SIM`) não foram alterados.
 - Medido (60 s simulados, mesma seed): velocidade média 211 → 177 m/s (−16 %); spawns 361 → 321 (−11 %); distância câmera–carro 14,1 → 11,4 m (−19 %); inclinação do olhar −4,6° → −4,5°.
+
+## Etapa 16 — Câmera ainda mais próxima, meteoros mais 20 % mais lentos e 20 % menos frequentes
+- `js/camera.js`: `ZOOM` .8 → .64. `js/meteors.js`: `SPEED_MUL` .84 → .672, `RATE_MUL` .9 → .72. Nada mais alterado.
