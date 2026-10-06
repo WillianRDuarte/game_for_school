@@ -4,7 +4,7 @@
 // liberados; muito longe → dados descartados. Pools/instancing: nada é criado depois que o limite é atingido.
 import * as THREE from 'three';
 import {surface} from './terrain.js';
-import {mulberry32,clamp,lerp,smoothstep} from './utils.js';
+import {mulberry32,clamp,lerp,smoothstep,CAR_SIZE_MUL} from './utils.js';
 
 export const MAX_METEORS=140;     // meteoros simultâneos no céu (teto absoluto do pool)
 const SPAWN_GAP=[.17,.036];       // intervalo médio entre spawns (s) em dificuldade 0 → 1   (antes .44 → .096)
@@ -20,7 +20,7 @@ const LETHAL_HOLD=.25,LETHAL_T=1.45,LETHAL_SLACK=10;   // s fora da zona antes d
 const FAR_DROP=1600;              // meteoro em queda cujo ponto de impacto ficou a >1,6 km do jogador é desativado (sem impacto)
 const CELL=256,LOAD_R=900,DROP_R=3000;    // célula; raio em que os visuais são "carregados"; raio em que os dados são descartados
 const GS=1.12;                    // escala da rocha caída em relação à rocha em queda
-export const CAR_R=1.5,CAR_OFFS=[1.7,0,-1.7];    // carro ≈ 3 círculos de raio 1,5 m ao longo do eixo
+export const CAR_R=1.5*CAR_SIZE_MUL,CAR_OFFS=[1.7*CAR_SIZE_MUL,0,-1.7*CAR_SIZE_MUL];    // carro ≈ 3 círculos de raio 1,5 m ao longo do eixo
 export const blastR=R=>R*.62+1.6;        // raio de explosão que fere o carro (NÃO é o tamanho do indicador)
 export const markR=R=>.9+R*.1;           // raio VISUAL do indicador de impacto no chão (m): pequeno disco vermelho (≈1,3–3,7 m); antes ≈ blastR·1,1·1,3 (6–30 m)
 const SEG=32,U_DECAL=[0,.3,.6,.8,.92,1.05,1.3],U_MARK=[0,.5,.8,.9,1,1.1];

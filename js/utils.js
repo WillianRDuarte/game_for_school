@@ -22,3 +22,4 @@ export function gnoise2(x,z){
 export function gfbm(x,z,o=4){let a=1,s=0,n=0;for(let i=0;i<o;i++){s+=a*gnoise2(x,z);n+=a;a*=.5;const nx=x*1.6-z*1.2+17.3,nz=x*1.2+z*1.6-9.1;x=nx;z=nz;}return s/n;}
 // Ruído "ridged": cristas e picos de montanha. -> ~[0,1]
 export function ridged(x,z,o=4){let a=1,s=0,n=0;for(let i=0;i<o;i++){const q=gnoise2(x,z),g=1.173-Math.sqrt(q*q+.03);s+=a*g*g;n+=a;a*=.42;const nx=x*1.6-z*1.2+5.7,nz=x*1.2+z*1.6+13.9;x=nx;z=nz;}return s/n;}   // crista suavizada (sem quina)
+export const CAR_SIZE_MUL=1.22;   // aumento visual de TODOS os carros (jogador e NPCs) em 22 %: só escala/colisor; velocidade, física e IA não mudam

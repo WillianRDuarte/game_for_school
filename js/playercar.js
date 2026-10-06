@@ -7,8 +7,9 @@
 //    que já estavam na caixa (perks.js guarda referência a eles para o efeito "fantasma").
 //  · Sem rede/loader (ou falha de carga): `loadPlayerCar` devolve null e o jogo segue com a caixa original.
 import * as THREE from 'three';
+import {CAR_SIZE_MUL} from './utils.js';
 export const PLAYER_GLB_URL='assets/models/player_mustang.glb';
-const MIN_Y=-.65,LEN=4.43,TARGET_LEN=4.2,REST=-.4;   // medidas do GLB (y mínimo, comprimento) · comprimento da caixa original · altura do pneu em relação ao pivô
+const MIN_Y=-.65,LEN=4.43,TARGET_LEN=4.2,REST=-.4/CAR_SIZE_MUL;   // medidas do GLB (y mínimo, comprimento) · comprimento da caixa original · altura do pneu em relação ao pivô
 export const CAR_SCALE=TARGET_LEN/LEN;
 function collect(n,out){if(n.isMesh||(n.geometry&&n.material))out.push(n);for(const c of n.children||[])collect(c,out);return out;}
 // Monta o Group do carro a partir da cena do GLB. `bodyMat`/`glassMat`: materiais já existentes do jogador (recebem a cor do chassi/vidro do GLB).

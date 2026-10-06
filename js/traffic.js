@@ -13,7 +13,7 @@ import {STEP} from './road.js';
 import {CHUNK_LEN} from './world.js';
 import {surface} from './terrain.js';
 import {blastR,CAR_R,CAR_OFFS} from './meteors.js';
-import {mulberry32,clamp,lerp} from './utils.js';
+import {mulberry32,clamp,lerp,CAR_SIZE_MUL} from './utils.js';
 
 export const MAX_DRIVERS=[8,16];   // motoristas simultâneos: dificuldade 0 → 1
 export const MAX_WRECKS=10,POOL=26; // destroços simultâneos · tamanho do pool (motoristas + destroços; nada é criado além disso)
@@ -83,11 +83,11 @@ export class TrafficSystem{
     if(Math.abs(this.ps-s)<110&&Math.abs(this.po-o)<9)return false;return true;}
   _spawn(s,ti,lane,vd,rear){
     const c=this._take();if(!c)return null;const T=TYPES[ti],rng=this.rng,big=rng()<T.big,q=this._qa;
-    const sx=big?1.45:1.2+rng()*.12,sy=big?1.65:1.2+rng()*.1,sz=big?1.65:1.2+rng()*.12;
+    const K=CAR_SIZE_MUL,sx=(big?1.45:1.2+rng()*.12)*K,sy=(big?1.65:1.2+rng()*.1)*K,sz=(big?1.65:1.2+rng()*.12)*K;   // ×K: carros 22 % maiores (colisor L/W/H deriva destas escalas)
     c.root.scale.set(sx,sy,sz);c.L=2.1*sz;c.W=1.0*sx;c.H=1.25*sy;c.hl=c.L;c.hw=c.W;c.mass=big?1.8:1;
     const colorI=(rng()*COLORS.length)|0,M=this.lib?this.lib.pick(ti,rng):null;
     if(M){   // modelo GLB: dimensões vêm do modelo (pequena variação de tamanho); colisão = caixa simplificada que acompanha o visual
-      const v=.96+rng()*.08;c.root.scale.setScalar(v);c.L=M.hl*v;c.W=M.hw*v;c.H=M.hh*v;c.hl=c.L;c.hw=c.W;c.mass=M.mass;vd=vd*(rear?1:M.vMul);
+      const v=(.96+rng()*.08)*CAR_SIZE_MUL;c.root.scale.setScalar(v);c.L=M.hl*v;c.W=M.hw*v;c.H=M.hh*v;c.hl=c.L;c.hw=c.W;c.mass=M.mass;vd=vd*(rear?1:M.vMul);
       this.stats.byModel[M.id]=(this.stats.byModel[M.id]||0)+1;}
     this._look(c,M);if(!M){c.body.material=T.dmg?this.mDmg:this.mBody[colorI];c.cab.material=this.mCab;}
     Object.assign(c,{active:true,state:DRIVE,rest:false,dmg:!!T.dmg,type:ti,vd,v:vd*(rear?.98:1),ov:0,acc:rear?6:lerp(3.5,7,rng()),brk:lerp(9,13,rng()),pref:lane,lane,jit:(rng()-.5)*3.2,free:false,freeO:0,evadeT:0,brakeT:0,

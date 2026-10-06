@@ -6,9 +6,9 @@ export class UI{
     this.lv=$('lives');this.fl=$('flash');this.over=$('over');this.os=$('overScore');this.ob=$('overBest');this.restartBtn=$('restart');this.dg=$('danger');this._dgt='';
     const wr=$('warn');this.wr=[];for(let i=0;i<NW;i++){const e=document.createElement('i');wr.appendChild(e);this.wr.push(e);}
     this._v=new THREE.Vector3();this._flashT=0;}
-  update(dt,player,world,renderer,meteors){
+  update(dt,player,world,renderer,meteors,scenery){
     this.f++;this.t+=dt;if(this.t>=.5){const fps=Math.round(this.f/this.t);this.f=this.t=0;
-      this.g.textContent=`${fps} fps · estrada ${world.active.size} · terreno ${world.tiles.size}${world.loading?'(+'+world.loading+')':''} · draw calls ${renderer.info.render.calls} · alt ${player.y.toFixed(0)} m · ${THEMES[player.track.sampleAt(player.s).th].name}`+(meteors?` · meteoros ${meteors.stats.alive} no céu · ${meteors.stats.rocks} no chão · crateras ${meteors.stats.decals}`:'');}
+      this.g.textContent=`${fps} fps · estrada ${world.active.size} · terreno ${world.tiles.size}${world.loading?'(+'+world.loading+')':''} · draw calls ${renderer.info.render.calls} · alt ${player.y.toFixed(0)} m · ${THEMES[player.track.sampleAt(player.s).th].name}`+(scenery&&scenery.lib?` · cenário ${scenery.stats.drawnB}/${scenery.stats.bld} prédios ${scenery.stats.drawnT}/${scenery.stats.trees} árvores`:'')+(meteors?` · meteoros ${meteors.stats.alive} no céu · ${meteors.stats.rocks} no chão · crateras ${meteors.stats.decals}`:'');}
     this.s.textContent=Math.round(player.speed*3.6)+' km/h'+(player.off>.5?' · fora da pista':'');this.d.textContent=Math.round(player.s)+' m';
   }
   setLives(n,max){n=Math.max(0,Math.min(max,n|0));this.lv.textContent=('❤️ '.repeat(n)+'🖤 '.repeat(max-n)).trim();}

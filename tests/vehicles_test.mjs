@@ -4,6 +4,7 @@
 import {Game} from '../js/game.js';
 import {buildLibrary,VEHICLES,BY_TYPE,CLASSES} from '../js/vehicles.js';
 import {loadGlbScene} from './glb_scene.mjs';
+import {CAR_SIZE_MUL} from '../js/utils.js';
 const ok=(c,m)=>{console.log((c?'  OK   ':'  FALHA ')+m);if(!c)process.exitCode=1;};
 const errs=[];const ce=console.error,cw=console.warn;console.error=(...a)=>{errs.push(a.join(' '));ce(...a);};console.warn=(...a)=>{errs.push(a.join(' '));cw(...a);};
 const dt=1/60,{scene,json}=loadGlbScene(new URL('../assets/models/npc_vehicles_lite.glb',import.meta.url).pathname);
@@ -40,7 +41,8 @@ console.log('3) orientação: frente (faróis/grade) para −z, traseira (lanter
 
 console.log('4) rodas no chão (nem enterrado nem flutuando)');
 for(const m of lib.models){const inst=lib.make(m);const inner=inst.children[0],wrap=inner.children[0];let mn=1e9;for(const me of wrap.children){const p=me.geometry.attributes.position,a=p.array;for(let i=0;i<p.count;i++)mn=Math.min(mn,a[i*3+1]);}
-  const bottom=(mn+wrap.position.y)*inner.scale.x+inner.position.y;ok(Math.abs(bottom+.3)<1e-6,`${m.id.padEnd(22)} base das rodas em y=${bottom.toFixed(3)} (pivô do NPC fica .3 m acima da pista → pneus tocam o asfalto)`);lib.give(inst);}
+  const bottom=((mn+wrap.position.y)*inner.scale.x+inner.position.y)*CAR_SIZE_MUL;   // o root do NPC é escalado por CAR_SIZE_MUL (+22 %); GROUND/CAR_SIZE_MUL mantém a roda na pista
+    ok(Math.abs(bottom+.3)<1e-6,`${m.id.padEnd(22)} base das rodas em y=${bottom.toFixed(3)} (pivô do NPC fica .3 m acima da pista → pneus tocam o asfalto)`);lib.give(inst);}
 
 console.log('5) integração com o tráfego (pool, fallback, cobertura da frota)');
 const g=new Game({}),TR=g.traffic,P=g.player;g.input.poll=()=>{};g.meteors.nextSpawn=1e9;
