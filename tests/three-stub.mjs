@@ -26,7 +26,7 @@ export class Mesh extends Object3D{constructor(g,m){super();this.geometry=g;this
 export class InstancedBufferAttribute extends BufferAttribute{}
 export class InstancedMesh extends Mesh{constructor(g,m,n){super(g,m);this.count=n;this.instanceMatrix=new BufferAttribute(new Float32Array(n*16),16);}}
 export class Points extends Mesh{}export class Sprite extends Mesh{constructor(m){super(null,m);}}
-export class HemisphereLight extends Object3D{}export class DirectionalLight extends Object3D{}
+export class PointLight extends Object3D{constructor(c,i,d,k){super();this.color=c;this.intensity=i;this.distance=d;this.decay=k;}}export class HemisphereLight extends Object3D{}export class DirectionalLight extends Object3D{}
 export class Scene{constructor(){this.children=new Set();}add(...o){for(const x of o)this.children.add(x);}remove(o){this.children.delete(o);}}
 export class PerspectiveCamera extends Object3D{
   constructor(fov,asp,n,f){super();Object.assign(this,{fov,aspect:asp,near:n,far:f});this.matrixWorldInverse=new Matrix4();this.projectionMatrix=new Matrix4();this.updateProjectionMatrix();}
@@ -36,3 +36,10 @@ export class PerspectiveCamera extends Object3D{
     e[0]=x.x;e[4]=x.y;e[8]=x.z;e[12]=d(x);e[1]=y.x;e[5]=y.y;e[9]=y.z;e[13]=d(y);e[2]=z.x;e[6]=z.y;e[10]=z.z;e[14]=d(z);e[3]=e[7]=e[11]=0;e[15]=1;}
   updateMatrixWorld(){}}
 export class WebGLRenderer{constructor(){this.info={render:{calls:0}};}setPixelRatio(){}setSize(){}render(){}}
+
+// --- atmosfera vulcânica (js/atmosphere.js)
+export class InstancedBufferGeometry extends BufferGeometry{constructor(){super();this.instanceCount=0;}}
+BufferGeometry.prototype.setDrawRange=function(a,b){this.drawRange={start:a,count:b};};
+export class DataTexture{constructor(d,w,h){this.image={data:d,width:w,height:h};}dispose(){}}
+export class Vector2{constructor(x=0,y=0){this.x=x;this.y=y;}set(x,y){this.x=x;this.y=y;return this;}}
+export const LinearFilter=1006,RGBAFormat=1023,DynamicDrawUsageX=1;

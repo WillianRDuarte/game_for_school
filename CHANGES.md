@@ -1,3 +1,14 @@
+# Etapa 17 — ATMOSFERA VULCÂNICA / APOCALÍPTICA (somente visual)
+Sem mudanças de gameplay, física, mapa, estrada, chunks, carros, NPCs, meteoros, lava (lógica), controles ou HUD.
+- NOVO `js/atmosphere.js`: céu em shader (preto-avermelhado → brasa no horizonte, vulcões distantes, brilho na direção da lava); **nuvens de fumaça 3D** (puffs billboard em 1 draw call instanciado, 3 camadas: horizonte/meio/perto, posição real no mundo → paralaxe, passam por cima da pista; ordenadas de trás p/ frente; iluminadas por baixo pela lava); **brasas e cinzas** (2 Points com movimento 100 % no vertex shader); névoa quente; luzes (hemisfério arroxeado + direcional laranja baixa vinda da lava); `gradeMaterial()` (color grading por material); 3 níveis de qualidade com queda automática de FPS.
+- `js/game.js`: usa `Atmosphere` no lugar do céu/névoa/luzes azuis; celular: resolução ≤ 1,5×, sem MSAA, nível 1; `pr` único para os `setView`.
+- `js/world.js` (materiais de terreno e asfalto), `js/scenery_models.js` / `js/scenery.js` (prédios e árvores): só `gradeMaterial` (dessatura/escurece/esquenta).
+- `js/lava.js`: só a cor da névoa passa a ser convertida para sRGB (para casar com a cena).
+- `index.html` + `css/style.css`: `#grade` (vinheta + gradiente quente, sem blend-mode).
+- `tests/atmosphere_test.mjs` (novo) e `tests/three-stub.mjs` (stubs extras).
+- Bloom real (pós-processamento) NÃO foi usado de propósito (custo em celular): o brilho vem de halos aditivos (brasas, aura da lava, nuvens iluminadas por baixo, céu).
+- Ajuste fino: constante `LOOK` no topo de `atmosphere.js`.
+
 # Meteor Run — novo sistema de estrada e terreno
 
 ## Arquivos modificados
@@ -107,3 +118,47 @@ Nada foi recriado: o Turbo já existia como o perk ⚡ NITRO em `perks.js` (efei
 - `js/traffic.js`: o carro do pool troca o visual (`_look`); colisor (L/W/H/hl/hw/massa) segue o modelo; IA igual, só modificadores pequenos (vMul/agil); destroço usa o mesmo modelo; se o GLB falhar, volta às caixas. `js/main.js` carrega a biblioteca com timeout de 10 s; `index.html`: importmap `three/addons/`.
 - Player Car: NÃO alterado (continua a caixa procedural vermelha; não há GLB do jogador no projeto).
 - Testes: `tests/vehicles_test.mjs` (arquivo, escala dos 48, orientação, rodas no chão, cobertura dos 48, cada modelo individualmente, classes, destroços, colisão/escudo/meteoro, corrida longa, console). Regressão: turbo_shield, perks, orphan, danger, traffic, rocks, track, ground, lod, world, variety sem falhas novas; `meteor_test` p99 < 4 ms falha igual no projeto original (meteors.js inalterado).
+
+## Etapa 13 — CENÁRIO PROCEDURAL (prédios + árvores ao longo da estrada principal)
+Novo/integrado, sem recriar nada (estrada, terreno, chunks, tráfego, meteoros, perks, controles, carro do jogador e NPCs intactos). **Sem subestradas.**
+**Modelos (todos usados):** `tools/build_scenery.py` lê os 3 GLBs originais (copiados para `assets/models/originals/`, não alterados) e gera `assets/models/scenery_lite.glb` (785 KB; originais ≈ 10,9 MB):
+17 prédios — 10 acomodações (2 hotéis, 3 prédios de apartamentos, 5 casas) + 7 comércios (restaurante, loja, pizzaria, hamburgueria, café, cinema, shopping) — e 6 árvores (2 redondas, 2 ciprestes, 2 carvalhos ramificados;
+no original eram uma só malha soldada: separadas por componentes conexos). Colliders do pacote e placa de chão descartados; prédios 4–19 mil → 1,2–2,7 mil triângulos por clustering com quádricas (planos/quinas preservados, 1 cor de paleta por triângulo).
+`js/scenery_models.js`: tabela com escala, frente (+x nas acomodações, +z nos comércios), classe e limites de variação de escala **por modelo** (hotel ≈ 36 m, nunca arranha-céu), biblioteca carregada UMA vez, 1 geometria + 3 materiais compartilhados, sorteio com memória, `fallbackSceneryLibrary` (caixas/cones) se o GLB falhar.
+**Sistema:** `js/scenery.js` — regiões CAMPO/RURAL/SUBÚRBIO/URBANO (cadeia de Markov em segmentos de 400–1200 m, mistura suave de 150 m nas fronteiras, ruído independente por lado); geração por chunk do `world.js` (CHUNK_LEN 192 m): prédios até 9 chunks à frente, árvores até 6, 2 atrás,
+em fatias de ~2,5 ms por frame; chunk que sai da janela é descartado das grades e das instâncias. Posicionamento com `ground()`: pegada amostrada (5–9 pontos) + anel, distância mínima ao BORDO do asfalto por classe (13–23 m, vale para qualquer trecho de pista, também grampos), relevo máximo por classe, sem sobreposição;
+prédios sempre VERTICAIS sobre fundação instanciada (nunca flutuam); árvores acompanham 50 % da inclinação. Render: 1 `InstancedMesh` por modelo (+1 de fundações) → ≤ 24 draw calls; matrizes por chunk, só os visíveis (frustum + distância) são copiados a 10 Hz; árvores distantes afinadas.
+Colisão: 1 caixa orientada por prédio (carro = 3 círculos como nas rochas); batida ≥ 6 m/s → `Game._damage('Batida com um prédio')`; árvores não colidem.
+Futuro: registros com `state` (ST.INTACT/DAMAGED/BURNED/RUINED), `setState` + `model.variants`, `onMeteorImpact → onBuildingHit`, `buildingsNear` — sem efeito visual ainda.
+Alterados: `game.js` (criação, update, collide, reset, hook de impacto, +1 parâmetro no ui.update), `main.js` (carga do GLB), `ui.js` (contagem no #dbg). Novos: `scenery.js`, `scenery_models.js`, `tools/build_scenery.py`, `tools/preview_scenery.py`, `tests/scenery_test.mjs`, `tests/scenery_map.mjs`, `tests/scenery_render.mjs`.
+**Fato do terreno que molda o resultado:** ao lado da pista o terreno é um talude (mediana de ~10 m de desnível numa pegada de 15 m a 14 m do asfalto; 68 % das pegadas planas a ~70 m). O sistema busca chão plano afastando o lote aos poucos (5 tentativas) e recusa o resto: em desfiladeiros "urbanos" há poucos prédios; em planícies, muitos.
+Testes: `node --import ./tests/register.mjs tests/scenery_test.mjs` (QUICK=1 encurta). Mapa aéreo: `tests/scenery_map.mjs out.png 0 5000`. Vista do jogador por rasterização: `tests/scenery_render.mjs dir 150 800 2450`. Regenerar GLB: `python3 tools/build_scenery.py`.
+
+## Etapa 14 — INTEGRAÇÃO: TOUCH + MODELOS/TEXTURAS + CENÁRIO + carros 22 % maiores
+- Base: ZIP TOUCH (48 NPCs GLB, Mustang do jogador `playercar.js`/`player_mustang.glb`, controles de toque `touch.js`). Trazido do ZIP CENÁRIO: `js/scenery.js`, `js/scenery_models.js`, `assets/models/scenery_lite.glb` (+3 originais), `tools/build_scenery.py`, `tools/preview_scenery.py`, `tests/scenery_*.mjs`. (O ZIP "MODELO/TEXTURA" avulso não chegou; seu conteúdo — Mustang e 48 veículos — já estava no TOUCH.)
+- Conflitos resolvidos sem perda: `game.js` e `ui.js` (só diferiam pelos ganchos do cenário → versão do cenário, que contém tudo do touch), `main.js` (mesclado: veículos + Mustang + toque + cenário), `vehicles.js`/`traffic.js`/`npc_vehicles_lite.glb`/`tools/build_vehicles.py`/`glb_scene.mjs` (versão do TOUCH: 48 modelos; a do cenário tinha só 9), `index.html`/`css/style.css` (TOUCH: viewport + botões), `CREDITS.md` (mesclado).
+- CARROS +22 %: `CAR_SIZE_MUL=1.22` em `js/utils.js`. Jogador: `mesh.scale` 1,3 → 1,3×1,22 (`player.js`); `REST` do Mustang ÷ 1,22 para os pneus continuarem tocando a pista (`playercar.js`). NPCs: escala do modelo e da caixa de reserva ×1,22 (`traffic.js`); colisor (L/W/H) deriva dela; `GROUND` ÷ 1,22 em `vehicles.js` (pneus na pista). Colisão do jogador: `CAR_R` e `CAR_OFFS` ×1,22 (`meteors.js`) para acompanhar o corpo maior (também usados por tráfego/perks/cenário). Velocidade, física, IA e câmera NÃO foram alteradas (conferido: corrida determinística idêntica antes/depois).
+- Testes ajustados ao novo tamanho: `player_car_test.mjs` (escala 1,3×1,22; REST; usa o próprio asset se o upload original não existir), `vehicles_test.mjs` (base das rodas ×CAR_SIZE_MUL).
+
+## Etapa 15 — Câmera mais próxima, meteoros ~16 % mais lentos e ~10 % menos frequentes
+- `js/camera.js`: `ZOOM=.8` — a posição final da câmera e o alvo do olhar são escalados em torno do carro (≈20 % mais perto, mesmo ângulo/enquadramento; o estado suavizado do rig não muda).
+- `js/meteors.js`: `SPEED_MUL=.84` (tempo de queda ÷ .84 → velocidade ≈ −16 %; mesma trajetória/ângulo; mira em NPC/perk e indicadores usam o novo T) e `RATE_MUL=.9` (intervalo entre spawns ÷ .9 → ≈ −10 % de meteoros/impactos por segundo). Meteoro de punição (zona letal, `LETHAL_T`) e limite simultâneo (`SIM`) não foram alterados.
+- Medido (60 s simulados, mesma seed): velocidade média 211 → 177 m/s (−16 %); spawns 361 → 321 (−11 %); distância câmera–carro 14,1 → 11,4 m (−19 %); inclinação do olhar −4,6° → −4,5°.
+
+## Etapa 16 — Câmera ainda mais próxima, meteoros mais 20 % mais lentos e 20 % menos frequentes
+- `js/camera.js`: `ZOOM` .8 → .64. `js/meteors.js`: `SPEED_MUL` .84 → .672, `RATE_MUL` .9 → .72. Nada mais alterado.
+
+## Etapa 15 — LAVA (única mudança)
+Novo: `js/lava.js` (`LavaSystem`) · `tests/lava_test.mjs`. Ganchos mínimos: `game.js` (cria/atualiza/reinicia a lava, `_burn()`), `index.html` (`#lavaglow`, `#lavahud`), `css/style.css` (2 regras), `tests/three-stub.mjs` (classe `PointLight`).
+- Frente de lava = distância na pista (mesma unidade de `player.s`). Começa 120 m atrás; velocidade 15 m/s crescendo até 26 m/s (8 km); elástico: acima de 260 m de intervalo acelera (teto 46 m/s); intervalo máx. 440 m. `player.s <= front` → Game over imediato ("Engolido pela lava"). Todos os números em `LAVA` (topo de lava.js).
+- Visual: malha por chunk de 192 m (pool, ≤6 ativos, revelada por `discard`), parede de fogo + aura, 340 partículas em 2 `Points`, 1 `PointLight`, aviso de proximidade no HUD. ~10 objetos de cena.
+- Verificado: lógica em Node (lava_test) e os 8 shaders compilados em WebGL2 real; aparência da textura conferida. NÃO aberto com three.js real (CDN indisponível aqui): FPS e a aparência final da parede/partículas precisam ser conferidos no navegador.
+
+## Etapa 16 — LAVA: área muito maior (única mudança)
+- `js/lava.js`: a superfície passou de ±150 m (15 colunas, "placa" de ~300 m) para **±720 m** (57 colunas; as 15 originais continuam idênticas, mais 21 por lado a cada ~27 m) e de 520 m para **1150 m atrás da frente**, inclusive antes do início da pista (`MIN_CHUNK=-5`, reta prolongada). É malha 3D real: cada vértice usa `surface()` (altura do terreno + folga que cresce até +0,8 m nas bordas), então acompanha subidas, descidas e curvas.
+- Curvas: as colunas originais se comportam exatamente como antes; as novas se espalham só até o limite em que a malha não se dobra (0,8·raio da curva), então no lado interno da curva não cruzam.
+- Parede da frente e aura cobrem a mesma largura nova. Partículas continuam só nas colunas originais (mesma densidade/aparência de antes).
+- Desempenho: colunas novas da parede são atualizadas em rodízio (1 em cada 4 frames); LOD de shader para pixels > 450–800 m (4 amostras de ruído em vez de 9, com mistura suave). `bind()` ~5 → ~35 ms; `lava.update` médio ~0,25 ms.
+- NÃO mudou: velocidade (BASE/GROW/VMAX/elástico), distância inicial (120 m), regra de morte, HUD/luz/cores, mundo, estrada, chunks do mundo, meteoros, NPCs, carros, controles.
+- `tests/lava_test.mjs`: limite de chunks de lava ativos 6 → 10 (a janela é maior de propósito).
+- Verificado em Chromium com WebGL real (three.js r160): sem erros de console; curva, vistas de cima/lateral/trás, morte, reinício e 12 saltos de 500 m sem vazamento de geometrias.

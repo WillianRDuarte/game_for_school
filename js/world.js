@@ -5,6 +5,7 @@
 //    os tiles que os substituem estão prontos (nunca aparece buraco). Frustum culling: automático (bounding sphere).
 import * as THREE from 'three';
 import {STEP,fillRoad,TEX_A} from './road.js';
+import {gradeMaterial} from './atmosphere.js';
 import {TILE_N,MIN_TILE,LEVELS,ROOT,TILE_VERTS,TileSampler,buildTileIndex} from './terrain.js';
 export const CHUNK_N=48, CHUNK_LEN=CHUNK_N*STEP;
 const SPLIT=1.0;          // um tile é subdividido enquanto o jogador estiver a < SPLIT×tamanho dele
@@ -32,9 +33,9 @@ export class World{
   constructor(scene,track,{ahead=20,behind=2}={}){
     Object.assign(this,{scene,track,ahead,behind});
     this.active=new Map();this.pool=[];                                   // chunks de estrada
-    this.roadMat=new THREE.MeshLambertMaterial({map:roadTexture(),polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
+    this.roadMat=gradeMaterial(new THREE.MeshLambertMaterial({map:roadTexture(),polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}),{sat:.75,bright:.9,tint:[1.08,.92,.82]});   // asfalto: só um grading mais quente/escuro (visual)
     this.rIdx=roadIndex(CHUNK_N);
-    this.terrMats=[];for(let l=0;l<LEVELS;l++)this.terrMats.push(new THREE.MeshLambertMaterial({vertexColors:true,polygonOffset:l>0,polygonOffsetFactor:l,polygonOffsetUnits:l}));   // LOD grosso "recua" onde sobrepõe o fino
+    this.terrMats=[];for(let l=0;l<LEVELS;l++)this.terrMats.push(gradeMaterial(new THREE.MeshLambertMaterial({vertexColors:true,polygonOffset:l>0,polygonOffsetFactor:l,polygonOffsetUnits:l}),{sat:.5,bright:.78,tint:[1.14,.88,.72]}));   // LOD grosso "recua" onde sobrepõe o fino
     this.tIdx=new THREE.BufferAttribute(buildTileIndex(),1);
     this.tiles=new Map();this.tilePool=[];this.sampler=new TileSampler();this.job=null;
     this.want=[];this.wantMap=new Map();this.qx=1e9;this.qz=1e9;this.stats={built:0,ms:0};

@@ -1,4 +1,4 @@
-html,body{margin:0;height:100%;overflow:hidden;background:#9fc4e8;font-family:system-ui,sans-serif}
+html,body{margin:0;height:100%;overflow:hidden;background:#1a0804;font-family:system-ui,sans-serif}
 #c{width:100%;height:100%;display:block}
 #hud{position:fixed;top:12px;left:16px;color:#fff;text-shadow:0 1px 4px #000a}
 #speed{font-size:32px;font-weight:700}#dist{font-size:16px}#dbg{font-size:11px;opacity:.7;margin-top:6px}
@@ -64,3 +64,16 @@ body.touch{--b:clamp(52px,min(21vh,calc((100vw - 300px)/4.25)),104px);--m:max(12
 #tc .tb-gas{font-size:calc(var(--b)*.17);right:var(--mr);bottom:var(--m);width:calc(var(--b)*1.25);height:calc(var(--b)*1.25);background:#1c9a3f80;border-color:#7dff9f99}#tc .tb-gas.on{background:#3ddc6cb3;border-color:#fff}
 #tc .tb-brake{right:calc(var(--mr) + var(--b)*1.25 + var(--g));bottom:var(--m);background:#c8281e80;border-color:#ff9a8f99}#tc .tb-brake.on{background:#ff4a3cb3;border-color:#fff}
 #tc .tb-turbo{right:calc(var(--mr) + var(--b)*.12);bottom:calc(var(--m) + var(--b)*1.25 + var(--g));width:calc(var(--b)*.86);height:calc(var(--b)*.86);background:#d9a30080;border-color:#ffe27a99;font-size:calc(var(--b)*.17)}#tc .tb-turbo.on{background:#ffc400b3;border-color:#fff}
+
+/* ---- LAVA: brilho nas bordas e aviso de proximidade (js/lava.js) */
+#lavaglow{position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(transparent 45%,#ff5a1099 80%,#ff2a0acc)}
+#lavahud{position:fixed;top:104px;left:50%;transform:translateX(-50%);padding:5px 14px;border-radius:8px;background:#2a1408d9;border:1px solid #ff8a2e;color:#ffd27a;font:800 15px system-ui;text-shadow:0 1px 3px #000;display:none;pointer-events:none;white-space:nowrap}
+#lavahud.on{display:block}#lavahud.hot{background:#5a0a06e6;border-color:#ff3a1a;color:#fff;animation:dgp .35s infinite alternate}
+@media(max-width:700px){#lavahud{top:88px;font-size:13px}}
+
+/* ---- COLOR GRADING / vinheta vulcânica (overlay estático de custo ~0: só gradientes, sem mix-blend-mode nem filtros). Fica entre o canvas e o HUD. */
+#grade{position:fixed;inset:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse 85% 75% at 50% 58%,transparent 52%,rgba(18,4,2,.34) 82%,rgba(10,2,1,.62) 100%),
+    linear-gradient(to bottom,rgba(26,4,6,.30) 0%,rgba(26,4,6,0) 38%),
+    linear-gradient(to top,rgba(255,92,24,.07) 0%,rgba(255,92,24,0) 30%)}

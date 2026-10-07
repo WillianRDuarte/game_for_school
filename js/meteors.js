@@ -4,9 +4,10 @@
 // liberados; muito longe → dados descartados. Pools/instancing: nada é criado depois que o limite é atingido.
 import * as THREE from 'three';
 import {surface} from './terrain.js';
-import {mulberry32,clamp,lerp,smoothstep} from './utils.js';
+import {mulberry32,clamp,lerp,smoothstep,CAR_SIZE_MUL} from './utils.js';
 
 export const MAX_METEORS=140;     // meteoros simultâneos no céu (teto absoluto do pool)
+export const SPEED_MUL=.672,RATE_MUL=.72;   // meteoros mais 20 % mais lentos (.84→.672; tempo de queda ÷ SPEED_MUL; trajetória/ângulo iguais) e mais 20 % menos frequentes (.9→.72; intervalo entre spawns ÷ RATE_MUL)
 const SPAWN_GAP=[.17,.036];       // intervalo médio entre spawns (s) em dificuldade 0 → 1   (antes .44 → .096)
 const SIM=[36,110];               // máx. de meteoros simultâneos em dificuldade 0 → 1      (antes 20 → 60; sempre < MAX_METEORS: sobra vaga p/ o meteoro de punição)
 const FALL=[2.6,1.7];             // tempo médio de queda (s) em dificuldade 0 → 1          (antes 4.6 → 3.0)
@@ -20,7 +21,7 @@ const LETHAL_HOLD=.25,LETHAL_T=1.45,LETHAL_SLACK=10;   // s fora da zona antes d
 const FAR_DROP=1600;              // meteoro em queda cujo ponto de impacto ficou a >1,6 km do jogador é desativado (sem impacto)
 const CELL=256,LOAD_R=900,DROP_R=3000;    // célula; raio em que os visuais são "carregados"; raio em que os dados são descartados
 const GS=1.12;                    // escala da rocha caída em relação à rocha em queda
-export const CAR_R=1.5,CAR_OFFS=[1.7,0,-1.7];    // carro ≈ 3 círculos de raio 1,5 m ao longo do eixo
+export const CAR_R=1.5*CAR_SIZE_MUL,CAR_OFFS=[1.7*CAR_SIZE_MUL,0,-1.7*CAR_SIZE_MUL];    // carro ≈ 3 círculos de raio 1,5 m ao longo do eixo
 export const blastR=R=>R*.62+1.6;        // raio de explosão que fere o carro (NÃO é o tamanho do indicador)
 export const markR=R=>.9+R*.1;           // raio VISUAL do indicador de impacto no chão (m): pequeno disco vermelho (≈1,3–3,7 m); antes ≈ blastR·1,1·1,3 (6–30 m)
 const SEG=32,U_DECAL=[0,.3,.6,.8,.92,1.05,1.3],U_MARK=[0,.5,.8,.9,1,1.1];
@@ -193,7 +194,7 @@ export class MeteorSystem{
   // ---- spawn
   spawn(){
     const m=this._meteor(),mk=m&&this._marker();if(!m||!mk)return false;
-    const k=this.difficulty(),rng=this.rng,sz=this._size(k),T=lerp(FALL[0],FALL[1],k)*(.85+.3*rng());     // tempo de queda ≈1,5–3 s (antes 2,6–5,3 s): ~1,8× mais rápido
+    const k=this.difficulty(),rng=this.rng,sz=this._size(k),T=lerp(FALL[0],FALL[1],k)*(.85+.3*rng())/SPEED_MUL;     // tempo de queda ≈1,5–3 s (antes 2,6–5,3 s): ~1,8× mais rápido
     let pt=null;if(this.npcAim){const c=this.npcAim(T,k);if(c&&!this._blocks(c.x,c.z,sz.radius*GS*.95))pt={x:c.x,z:c.z,cat:c.cat};}   // (às vezes mira num NPC; mesma checagem de "nunca fecha a estrada")
     if(!pt&&this.perkAim){const c=this.perkAim(T,k);if(c&&!this._blocks(c.x,c.z,sz.radius*GS*.95))pt={x:c.x,z:c.z,cat:c.cat};}   // (perk de risco: impacto perto do perk; mesma checagem "nunca fecha a estrada")
     for(let tries=0;tries<4&&!pt;tries++){const c=this._pickImpact(T,k);if(!this._blocks(c.x,c.z,sz.radius*GS*.95))pt=c;}   // nunca fecha a estrada
@@ -426,7 +427,7 @@ export class MeteorSystem{
     // agenda de spawn (≈2,5× a anterior): intervalo médio 0,17 s → 0,036 s; simultâneos 36 → 110 (pool até MAX_METEORS=140); sem meteoros nos primeiros 2,5 s / 80 m
     if(spawn&&this.time>2.5&&this.player.s>80&&this.time>=this.nextSpawn){
       const maxSim=Math.round(lerp(SIM[0],SIM[1],k));
-      if(this.nActive<maxSim&&this.spawn())this.nextSpawn=this.time+lerp(SPAWN_GAP[0],SPAWN_GAP[1],k)*(.6+.8*this.rng());else this.nextSpawn=this.time+.05;
+      if(this.nActive<maxSim&&this.spawn())this.nextSpawn=this.time+lerp(SPAWN_GAP[0],SPAWN_GAP[1],k)*(.6+.8*this.rng())/RATE_MUL;else this.nextSpawn=this.time+.05;
     }
     this.warnings.length=0;const PX=this.player.x,PZ=this.player.z;
     for(const m of this.meteors){if(!m.active)continue;

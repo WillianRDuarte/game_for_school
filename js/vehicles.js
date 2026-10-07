@@ -9,6 +9,7 @@
 //    entre modelos de tamanhos originais bem diferentes (a coletânea vem em unidades de ~metros, mas com carros de 3,5 a 8,7 m).
 //  · Sem rede/loader (ou falha de carga): `loadVehicleLibrary` devolve null e o TrafficSystem continua com os carros-caixa originais.
 import * as THREE from 'three';
+import {CAR_SIZE_MUL} from './utils.js';
 
 export const GLB_URL='assets/models/npc_vehicles_lite.glb';
 const R=Math.PI;
@@ -75,7 +76,7 @@ export function buildLibrary(scene,{THREE:T=THREE}={}){
   // instância = Group com 1 Mesh por primitiva, SEM clonar geometria nem material
   lib.make=(m)=>{
     const free=lib.pool.get(m.idx);if(free.length)return free.pop();
-    const g=new T.Group(),inner=new T.Group();inner.scale.setScalar(m.scale);inner.rotation.y=m.yaw;inner.position.set(0,GROUND,0);   // escala, giro p/ a frente −z e rodas na pista
+    const g=new T.Group(),inner=new T.Group();inner.scale.setScalar(m.scale);inner.rotation.y=m.yaw;inner.position.set(0,GROUND/CAR_SIZE_MUL,0);   // escala, giro p/ a frente −z e rodas na pista
     const wrap=new T.Group();wrap.position.set(m.cx,m.cy,m.cz);
     for(const src of m.meshes){const mesh=new T.Mesh(src.geometry,src.material);mesh.userData.m0=src.material;wrap.add(mesh);}
     inner.add(wrap);g.add(inner);g.userData={mid:m.idx,meshes:wrap.children};lib.stats.instances++;lib.stats.live++;return g;

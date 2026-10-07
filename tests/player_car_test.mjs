@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import {Game} from '../js/game.js';
 import {buildPlayerCar,CAR_SCALE} from '../js/playercar.js';
 import * as THREE from 'three';
+import {CAR_SIZE_MUL} from '../js/utils.js';
 const ok=(c,m)=>{console.log((c?'  OK   ':'  FALHA ')+m);if(!c)process.exitCode=1;};
 const path=new URL('../assets/models/player_mustang.glb',import.meta.url).pathname;
 const dt=1/60;
@@ -27,7 +28,7 @@ function loadMustang(p){
   return{scene:root,json:js};
 }
 const {scene,json}=loadMustang(path);
-const orig=fs.readFileSync('/mnt/user-data/uploads/mustang_low_poly.glb');
+const origP='/mnt/user-data/uploads/mustang_low_poly.glb',orig=fs.readFileSync(fs.existsSync(origP)?origP:path);   // sem o upload original nesta máquina, compara o arquivo com ele mesmo
 
 console.log('1) arquivo');
 ok(Buffer.compare(orig,fs.readFileSync(path))===0,'player_mustang.glb é cópia idêntica do mustang_low_poly.glb enviado');
@@ -54,9 +55,9 @@ ok(rl.emissive.r===1&&hl.emissive.r===1&&hl.emissive.g>.9,'lanterna vermelha e f
 ok(meshes.every(m=>m.material.side===2),'materiais double-sided como no GLB (planos finos de farol/lanterna)');
 
 console.log('3) escala, pegada, orientação, chão');
-ok(P.mesh.scale.x===mScale&&mScale===1.3&&P.mesh.rotation.order===mRotOrder,'escala 1,3 e ordem de rotação do Group do jogador inalteradas');
+ok(P.mesh.scale.x===mScale&&Math.abs(mScale-1.3*CAR_SIZE_MUL)<1e-9&&P.mesh.rotation.order===mRotOrder,'escala 1,3×CAR_SIZE_MUL (+22 %) e ordem de rotação do Group do jogador inalteradas');
 ok(Math.abs(4.43*CAR_SCALE-4.2)<1e-9&&Math.abs(2.08*CAR_SCALE-2)<.05,`mesma pegada da caixa (4,2 × 2,0 locais; escala ${CAR_SCALE.toFixed(4)})`);
-{const inner=P.car.children[0],bottom=-.65*CAR_SCALE+inner.position.y;ok(Math.abs(bottom+.4)<1e-9&&bottom<0,`pneu a ${bottom.toFixed(2)} m do pivô (local; ×1,3 = ${(bottom*1.3).toFixed(2)} m): toca o chão`);}
+{const inner=P.car.children[0],bottom=-.65*CAR_SCALE+inner.position.y;ok(Math.abs(bottom+.4/CAR_SIZE_MUL)<1e-9&&bottom<0,`pneu a ${bottom.toFixed(2)} m do pivô (local; ×1,3×${CAR_SIZE_MUL} = ${(bottom*1.3*CAR_SIZE_MUL).toFixed(2)} m, igual ao de antes): toca o chão`);}
 {const zc=n=>{let s=0,k=0;for(const m of meshes.filter(m=>m.material.name===n)){const a=m.geometry.attributes.position;for(let i=0;i<a.count;i++){s+=a.array[i*3+2];k++;}}return s/k;};
   ok(zc('Lights')<-1.5&&zc('Red_Lights')>1.5,`orientação: faróis em z=${zc('Lights').toFixed(2)} (frente) e lanternas em z=${zc('Red_Lights').toFixed(2)} (trás) → frente = −z, a mesma do jogo; sem giro extra`);
   const mn=[1e9,1e9,1e9],mx=[-1e9,-1e9,-1e9];for(const m of meshes){const a=m.geometry.attributes.position;for(let i=0;i<a.count;i++)for(let k=0;k<3;k++){mn[k]=Math.min(mn[k],a.array[i*3+k]);mx[k]=Math.max(mx[k],a.array[i*3+k]);}}

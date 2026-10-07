@@ -1,3 +1,26 @@
+# HANDOFF — ATUALIZAÇÃO (Etapa 17: ATMOSFERA VULCÂNICA)
+Estado: visual implementado (ver CHANGES.md "Etapa 17"). Node: lava/scenery/world/orphan/danger/perks/turbo_shield/player_car/atmosphere OK. Shaders do céu/nuvens/brasas/cinzas compilados e renderizados num Chromium real (WebGL2, SwiftShader) com um harness que imita o prefixo do three.js — achou e corrigiu `patch` (palavra reservada GLSL ES 3.00).
+PENDENTE: (1) o jogo completo NÃO foi aberto com three.js real (CDN/npm bloqueados aqui): iluminação (LOOK.HEMI_I/SUN_I), grading e FPS em GPU/celular real são DESCONHECIDOS — ajuste em `LOOK` (atmosphere.js) e `GRADE` conforme o resultado; (2) a imagem de referência não veio no envio (só o ZIP) — estética baseada na descrição; (3) bloom real não implementado (custo em celular).
+
+---
+# HANDOFF — ATUALIZAÇÃO (Etapa 16: LAVA com área muito maior)
+Estado: só `js/lava.js` (+ limite de chunks em `tests/lava_test.mjs`). Superfície ±720 m × 1150 m atrás da frente, malha 3D que segue o terreno; velocidade/gap inicial/morte/efeitos preservados. `lava_test` passa; testado em Chromium com WebGL real (SwiftShader) usando three.js r160 (clone de mrdoob/three.js; CDN/npm seguem bloqueados — o harness trocava as URLs do CDN).
+PENDENTE: (1) FPS em GPU real não medido (só renderização por software: lava cobrindo a tela inteira de 1 km de altura custou ~+40 %, vista realista ~+10 %); se precisar, reduzir `OUT_W`/`BACK_VIS` ou antecipar o LOD do shader (`kl` em SURF_FS); (2) prédios/árvores do cenário ficam parcialmente submersos na lava e há pequenas "ilhas" onde o terreno fura a malha (1–4 % da área, ≤ 2–3 m); (3) `meteor_test` (4 itens) e `traffic_test` item 6 / `vehicles_test` "objetos estabilizam" falham também no projeto de entrada.
+
+---
+# HANDOFF — ATUALIZAÇÃO (Etapa 14: INTEGRAÇÃO touch + modelos + cenário, carros +22 %)
+Estado: 3 versões unidas num só projeto (ver CHANGES.md "Etapa 14"). Testes Node: vehicles/scenery/player_car/turbo_shield/perks/orphan/danger/track/ground/lod/world/rocks/touch/rate/variety/meteor OK; `touch_browser_test.py` (Chromium real) 66/66. `traffic_test` item 6 e `vehicles_test` "objetos estabilizam" falham também no TOUCH original (intermitentes/sensíveis à máquina). Rode os testes um por vez (em paralelo os limites de desempenho estouram).
+Carros +22 %: constante única `CAR_SIZE_MUL` (js/utils.js) → `player.js`, `playercar.js`, `traffic.js`, `vehicles.js`, `meteors.js` (CAR_R/CAR_OFFS).
+PENDENTE: (1) NUNCA aberto com WebGL/three.js real (CDN/npm inacessíveis aqui): aparência, FPS, GLTFLoader e InstancedMesh reais são DESCONHECIDOS — abra no navegador e confira o tamanho dos carros e se a câmera ainda enquadra bem o carro maior; (2) o ZIP "MODELO/TEXTURA" avulso não foi enviado (conteúdo equivalente já estava no TOUCH); (3) licenças não comerciais: Drifter (CC-BY-NC), árvores (CC-BY-NC-SA), prédios (Sketchfab Standard) — ver assets/models/CREDITS.md; origem/licença do Mustang não informadas.
+
+---
+# HANDOFF — ATUALIZAÇÃO (Etapa 13: CENÁRIO — prédios e árvores GLB ao longo da pista)
+Estado: implementado e integrado (`js/scenery.js`, `js/scenery_models.js`, `assets/models/scenery_lite.glb`, `tools/build_scenery.py`). `tests/scenery_test.mjs` passa (QUICK e completo); regressão: vehicles/danger/orphan/perks/turbo_shield/track/ground/lod/world OK; traffic só falha o item 6 (intermitente, já conhecido). Detalhes em CHANGES.md "Etapa 13".
+Usa os 17 prédios (10 acomodações + 7 comércios) e as 6 árvores. Regiões CAMPO/RURAL/SUBÚRBIO/URBANO; geração por chunk (CHUNK_LEN) em fatias de ~2,5 ms; InstancedMesh por modelo; colisão por caixa; ganchos de destruição (`state`, `setState`, `variants`, `onBuildingHit`) sem efeito visual.
+PENDENTE: (1) **nunca aberto em navegador com WebGL** — GLTFLoader, aparência real, FPS e o `InstancedMesh` real são DESCONHECIDOS (só Node com stub + rasterizador de software: `tests/scenery_render.mjs`, `tests/scenery_map.mjs`); (2) o terreno ao lado da pista é talude: em desfiladeiros há poucos prédios (limites por classe em `CLASSES`, scenery_models.js; mais tentativas em `_group`); (3) licenças: árvores CC-BY-NC-SA, prédios Sketchfab Standard (ver CREDITS.md); (4) a escada de incêndio de `bld_apt_b` virou silhueta escura na simplificação; (5) sem LOD de malha (só afinamento de árvores e culling por chunk) — se o FPS pedir, gerar um 2º GLB simplificado e usar por distância.
+Teste: `node --import ./tests/register.mjs tests/scenery_test.mjs` (QUICK=1 encurta). Regenerar GLB: `python3 tools/build_scenery.py`.
+
+---
 # HANDOFF — ATUALIZAÇÃO (Etapa 12: 48 MODELOS DE VEÍCULOS NPC)
 Estado: SUVs (8) + Drifter (1) + coletânea (39) integrados ao tráfego; todos selecionáveis. `tests/vehicles_test.mjs` passa 100 %. Detalhes em CHANGES.md "Etapa 12".
 Arquivos: `js/vehicles.js` (NOVO) · `js/traffic.js` (`_look`, `_paint`, setLibrary) · `js/main.js` · `index.html` (importmap) · `assets/models/npc_vehicles_lite.glb` + `originals/` + `CREDITS.md` · `tools/build_vehicles.py`, `tools/preview_vehicles.py`.

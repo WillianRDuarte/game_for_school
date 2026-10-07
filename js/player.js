@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import {clamp,lerp,smoothstep,noise2} from './utils.js';
 import {STEP} from './road.js';
 import {surface} from './terrain.js';
+import {CAR_SIZE_MUL} from './utils.js';
 import {buildPlayerCar} from './playercar.js';
 export const HARD_MAX=105;   // velocidade absoluta máxima (m/s) com qualquer combinação de perks
 const HL=2.6,HW=1.3; // meia-distância entre eixos / meia-bitola (usados para as rodas)
@@ -13,7 +14,7 @@ export class Player{
     this.mesh=new THREE.Group();this.mesh.rotation.order='YXZ';
     const body=new THREE.Mesh(new THREE.BoxGeometry(2,.7,4.2),new THREE.MeshLambertMaterial({color:0xd8322b}));body.position.y=.35;
     const cab=new THREE.Mesh(new THREE.BoxGeometry(1.6,.6,1.9),new THREE.MeshLambertMaterial({color:0x222831}));cab.position.set(0,.95,.3);
-    this.mesh.add(body,cab);this.body=body;this.cab=cab;this.mesh.scale.setScalar(1.3);this.respawn(this.idx*STEP);
+    this.mesh.add(body,cab);this.body=body;this.cab=cab;this.mesh.scale.setScalar(1.3*CAR_SIZE_MUL);this.respawn(this.idx*STEP);
   }
   setCar(scene){ // troca a caixa pelo modelo GLB (cena carregada). Idempotente; null/falha = mantém a caixa. body/cab continuam como children[0..1] (perks.js lê seus materiais), só ficam invisíveis.
     if(!scene||this.car)return false;const car=buildPlayerCar(scene,this.body.material,this.cab.material);if(!car)return false;
