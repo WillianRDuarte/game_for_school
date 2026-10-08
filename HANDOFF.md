@@ -1,3 +1,23 @@
+# HANDOFF — ATUALIZAÇÃO (Etapa 20: NPCs mais realistas)
+Estado: implementado só em `js/traffic.js` (ver CHANGES.md "Etapa 20"). Ajuste fino em `_persona` (probabilidades/faixas dos traços), `JERK/JERK_HARD`, `LAT` (`latA`) e no ganho de freada (`err<0?8`).
+PENDENTE: nunca aberto com three.js/WebGL real (CDN bloqueado): a sensação visual (inclinação, suavidade) só foi validada pela lógica em Node e Chromium sem WebGL. `traffic_test` item 6 é intermitente (já era).
+
+---
+# HANDOFF — ATUALIZAÇÃO (Etapa 19c: RÉ + posição do joystick)
+Estado: ver CHANGES.md "Etapa 19c". PENDENTE: nunca aberto com three.js/WebGL real nem num Android físico (só Chromium com emulação mobile/multitouch). Ajuste `REV_MAX`/`REV_A` (player.js) e `STICK_FULL` (input.js) conforme a sensação.
+
+---
+# HANDOFF — ATUALIZAÇÃO (Etapa 19: JOYSTICK + TELA CHEIA)
+Estado: implementado (ver CHANGES.md "Etapa 19"). `touch_browser_test.py` 107/107 (Chromium real, tela cheia real); `touch_test`, `turbo_shield_test`, `perks_test` OK.
+PENDENTE: o jogo completo continua NUNCA aberto com three.js/WebGL real aqui (CDN bloqueado): joystick e botão foram validados na página real com um harness no lugar do `main.js`. Confirme num Android: sensibilidade do joystick (`DZ` e `.8` em `jset`, touch.js) e o enquadramento após entrar em tela cheia.
+
+---
+# HANDOFF — ATUALIZAÇÃO (Etapa 18: METEOR DIRECTOR)
+Estado: implementado (ver CHANGES.md "Etapa 18"). `director_test`, danger, rocks, perks, turbo_shield, traffic e orphan passam. `meteor_test` falha os mesmos 4 itens do projeto original (a lava mata o jogador após `respawn(40)` na seção 3); p99 equivalente ao original (2,8 ms) — varia com a máquina.
+PENDENTE: (1) NUNCA aberto com three.js/WebGL real (CDN bloqueado): sensação de jogo, FPS e balanceamento só validados em simulação Node; ajuste em `_profile()`/`W` de `js/director.js`; (2) sem aviso visual de tempestade na HUD (só na linha de debug).
+Teste: `node --import ./tests/register.mjs tests/director_test.mjs` (QUICK=1 encurta; rodar isolado).
+
+---
 # HANDOFF — ATUALIZAÇÃO (Etapa 17: ATMOSFERA VULCÂNICA)
 Estado: visual implementado (ver CHANGES.md "Etapa 17"). Node: lava/scenery/world/orphan/danger/perks/turbo_shield/player_car/atmosphere OK. Shaders do céu/nuvens/brasas/cinzas compilados e renderizados num Chromium real (WebGL2, SwiftShader) com um harness que imita o prefixo do three.js — achou e corrigiu `patch` (palavra reservada GLSL ES 3.00).
 PENDENTE: (1) o jogo completo NÃO foi aberto com three.js real (CDN/npm bloqueados aqui): iluminação (LOOK.HEMI_I/SUN_I), grading e FPS em GPU/celular real são DESCONHECIDOS — ajuste em `LOOK` (atmosphere.js) e `GRADE` conforme o resultado; (2) a imagem de referência não veio no envio (só o ZIP) — estética baseada na descrição; (3) bloom real não implementado (custo em celular).

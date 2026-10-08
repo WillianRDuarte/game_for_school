@@ -2,7 +2,7 @@
 import {Game,MAX_LIVES,INVULN} from '../js/game.js';
 import {surface} from '../js/terrain.js';
 const ok=(c,m)=>{console.log((c?'  OK   ':'  FALHA ')+m);if(!c)process.exitCode=1;};
-const g=new Game({}),dt=1/60;g.input.poll=()=>{};   // sem teclado: o piloto automático escreve em g.input
+const g=new Game({}),dt=1/60;g.input.poll=()=>{};g.meteors.director.enabled=false;   // (testes de taxa/distribuição deste arquivo medem o agendador ORIGINAL; o Director tem tests/director_test.mjs) sem teclado: o piloto automático escreve em g.input
 const bot={evade:false};
 function drive(){ // segue a pista; opcionalmente desvia dos avisos
   const P=g.player,T=g.track,p=T.sampleAt(P.s+25),want=Math.atan2(p.x-P.x,-(p.z-P.z));let err=Math.atan2(Math.sin(want-P.psi),Math.cos(want-P.psi)),steer=err*3;

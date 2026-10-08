@@ -45,7 +45,7 @@ const ZMIX=[[.72,.2,.05,0,.03],[.9,.08,0,0,.02],[.58,.17,.15,.04,.06],[.12,.2,.3
 const ZTR=[[.12,.33,.55,0],[.35,.15,.5,0],[.2,.1,.15,.55],[.1,0,.55,.35]];                      // transições: de CAMPO/RURAL/SUBÚRBIO/URBANO para …
 const FIELDS=['lot','grove','iso','e0','e1','grp','rows','jit','gv'];
 export class ZoneMap{
-  constructor(seed){this.rng=mulberry32((seed*2654435761)^0x9e3779b9);this.segs=[];this.k=0;}
+  constructor(seed){this.rng=mulberry32(Math.imul(seed,0x9e3779b1)^0x9e3779b9);this.segs=[];this.k=0;}
   _more(){
     const L=this.segs[this.segs.length-1];let z,len;
     if(!L){z=0;len=420+this.rng()*220;}                                    // a corrida começa em campo aberto…
@@ -104,6 +104,7 @@ export class SceneryManager{
     pm.instanceMatrix.setUsage(T.DynamicDrawUsage);pm.frustumCulled=false;pm.count=0;pm.visible=false;pm.name='sc_plinth';this.scene.add(pm);this.plinth={mesh:pm,cap:192,n:0,geo:bg,mat:bm};
     this.tw=new Array(lib.trees.length).fill(1);this.dirty=true;
   }
+  reseed(seed){this.seed=seed;}   // nova semente da partida (chamar antes de reset())
   reset(){   // novo mundo (reinício): descarta tudo (as instâncias e as grades); a biblioteca e os pools de instâncias continuam
     this.chunks.clear();this.job=null;this.bgrid.clear();this.tgrid.clear();this.zones=new ZoneMap(this.seed);this.dirty=true;this.rt=0;
     for(const p of this.pools.values()){p.n=0;p.mesh.count=0;p.mesh.visible=false;}if(this.plinth){this.plinth.n=0;this.plinth.mesh.count=0;this.plinth.mesh.visible=false;}
@@ -119,7 +120,7 @@ export class SceneryManager{
   // ---------------------------------------------------------------- amostragem do terreno
   _rej(k){this.stats.rej[k]=(this.stats.rej[k]||0)+1;return null;}
   _gnd(x,z,o=_g){return ground(this.track,x,z,o,0);}
-  _mod(s,sd){return clamp(1+.8*gnoise2(s/430+sd*17.3+this.seed*.37,sd*3.1+.5),.15,2);}   // ruído de baixa frequência INDEPENDENTE por lado: manchas e lados diferentes
+  _mod(s,sd){return clamp(1+.8*gnoise2(s/430+sd*17.3+(this.seed%100003)*.37,sd*3.1+.5),.15,2);}   // ruído de baixa frequência INDEPENDENTE por lado: manchas e lados diferentes
   // ---------------------------------------------------------------- fase A: prédios de um chunk (gerador: cede a vez entre eventos)
   *_genA(ch){
     const rng=mulberry32((this.seed*7919+ch.c*104729+11)>>>0),zp=_zp,tr=this.track;

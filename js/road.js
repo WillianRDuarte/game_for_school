@@ -59,10 +59,14 @@ export const THEMES=[
 const THEME_W=[2.2,2,2,1.5,1.5,1.4];
 
 export class Track{
-  constructor(seed=7){
-    this.rng=mulberry32(seed);this.samples=new Map();this.count=0;this.minKept=0;
+  // opts.varyStart: região inicial sorteada (planície/colinas/vale) e reta inicial de comprimento variável — usado pelo jogo (nova seed a cada partida).
+  // opts.safe: nº de amostras iniciais (4 m cada) sem curvas fechadas (raio < 190 m: TIGHT/HAIRPIN/CHICANE/EASE_IN/EASE_OUT) e com greide limitado → largada sempre jogável.
+  // Sem opts (testes antigos / Track(7)) o comportamento é exatamente o original.
+  constructor(seed=7,opts={}){
+    this.seed=seed;this.safe=opts.safe||0;this.rng=mulberry32(seed);this.samples=new Map();this.count=0;this.minKept=0;
     this.x=0;this.y=0;this.z=0;this.h=0;this.w=40;this.g=0;this.first=true;
-    this.th=0;this.region={end:260};this.hs=null;this.hk=0;this.vs=null;this.vk=0;this.ws=null;this.wk=0;
+    this.th=0;this.region={end:260};this.startN=75;
+    if(opts.varyStart){const r=mulberry32((seed^0x51ed270b)|0);this.th=[0,0,1,3,0,1][Math.floor(r()*6)];this.startN=75+Math.floor(r()*50);this.region={end:240+Math.floor(r()*200)};}this.hs=null;this.hk=0;this.vs=null;this.vk=0;this.ws=null;this.wk=0;
     this.lastH='';this.dir=0;this.runY=0;this.log=null;
     this.grid=new Map();this.coarse=new Map();this._nr={y:0,yi:0,d:0,w:0,o:0};
   }
@@ -76,9 +80,11 @@ export class Track{
   }
   _pickH(){
     const T=THEMES[this.th],rng=this.rng;this.hk=0;
-    if(this.first){this.hs={n:75,f:null,sgn:1,kap:0,name:'STRAIGHT'};return;}
+    if(this.first){this.hs={n:this.startN,f:null,sgn:1,kap:0,name:'STRAIGHT'};return;}
+    const safe=this.count<this.safe;
     for(let tries=0;tries<10;tries++){
       const name=this._weighted(T.h,this.lastH),M=MAN[name];
+      if(safe&&M.R&&M.R[0]<190)continue;   // largada: só manobras com raio ≥ 190 m (sem TIGHT/HAIRPIN/CHICANE/EASE_IN/EASE_OUT)
       if(name==='STRAIGHT'){
         const L=lerp(M.len[0],M.len[1],rng())*(T.mt<.3?1.2:T.mt>.8?.5:1);
         this.hs={n:Math.round(L/STEP),f:null,sgn:1,kap:0,name};this.lastH=name;return;}
@@ -95,7 +101,7 @@ export class Track{
   }
   _pickV(){
     const T=THEMES[this.th],V=T.v,rng=this.rng,y=this.y;this.vk=0;
-    if(this.first){this.vs={n:75,g0:0,g1:0};return;}
+    if(this.first){this.vs={n:this.startN,g0:0,g1:0};return;}
     let dir;
     if(y>Y_MAX-70)dir=-1;else if(y<Y_MIN+50)dir=1;
     else{
@@ -103,7 +109,7 @@ export class Track{
       if(this.dir!==0&&run>V.run)dir=-this.dir;                                   // já subiu/desceu demais: inverte (topo / vale)
       else{const pUp=clamp(.5-(y-Y_MID)/(2*Y_HALF)*.6,.15,.85);dir=rng()<pUp?1:-1;if(this.dir&&rng()<.35)dir=this.dir;}
     }
-    const flat=rng()<V.flat,len=lerp(V.len[0],V.len[1],rng());let mag=lerp(V.g[0],V.g[1],Math.pow(rng(),.85));
+    const flat=rng()<V.flat,len=lerp(V.len[0],V.len[1],rng());let mag=lerp(V.g[0],V.g[1],Math.pow(rng(),.85));if(this.count<this.safe)mag=Math.min(mag,.07);   // largada: greide suave
     if(!flat){const est=.5*(this.g+dir*mag)*len;                                  // ganho estimado (inclui a inércia do greide atual)
       if(est>0&&y+est>Y_MAX-20)dir=-1;else if(est<0&&y+est<Y_MIN+20)dir=1;}          // não estoura a faixa de altitude
     const g1=flat?(rng()-.5)*.02:dir*mag;

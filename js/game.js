@@ -1,6 +1,8 @@
 // Estado geral e loop principal.
 import * as THREE from 'three';
 import {Track,STEP} from './road.js';
+import {setTerrainSeed} from './utils.js';
+import {randomSeed,deriveSeeds,urlSeed} from './seeds.js';
 import {World} from './world.js';
 import {Player} from './player.js';
 import {CameraRig} from './camera.js';
@@ -22,15 +24,16 @@ export class Game{
     this.camera=new THREE.PerspectiveCamera(65,1,1,7000);
     this.atmo=new Atmosphere(this.scene,{mobile:this.mobile});   // névoa + luzes + céu + nuvens + brasas/cinzas (ANTES da lava: ela lê a névoa da cena)
     this.atmo.onTier=t=>{if(t===0&&this.pr>1){this.pr=1;this.renderer.setPixelRatio(1);this.resize();}};   // FPS muito baixo: também reduz a resolução
-    this.track=new Track(7);this.world=new World(this.scene,this.track);
+    this.seed=urlSeed()||randomSeed();this.seeds=deriveSeeds(this.seed);setTerrainSeed(globalThis.__LEGACY_MAP?0:this.seeds.terrain);   // seed da partida: define estrada, terreno, cenário, tráfego, perks e meteoros
+    this.track=this._newTrack();this.world=new World(this.scene,this.track);
     this.player=new Player(this.track);this.scene.add(this.player.mesh);
     this.rig=new CameraRig(this.camera,this.player);this.input=new Input();this.ui=new UI();
-    this.meteors=new MeteorSystem(this.scene);this.meteors.onImpact=e=>this._onImpact(e);this.meteors.onRockHit=e=>this._onRockHit(e);this.meteors.bind(this.track,this.player);
-    this.traffic=new TrafficSystem(this.scene);this.traffic.onPlayerHit=e=>this._onTrafficHit(e);this.traffic.bind(this.track,this.player,this.meteors);   // carros NPC (módulo próprio)
+    this.meteors=new MeteorSystem(this.scene,this.seeds.meteors);this.meteors.onImpact=e=>this._onImpact(e);this.meteors.onRockHit=e=>this._onRockHit(e);this.meteors.bind(this.track,this.player);
+    this.traffic=new TrafficSystem(this.scene,this.seeds.traffic);this.traffic.onPlayerHit=e=>this._onTrafficHit(e);this.traffic.bind(this.track,this.player,this.meteors);   // carros NPC (módulo próprio)
     this.meteors.npcAim=(T,k)=>this.traffic.aim(T,k);
-    this.perks=new PerkSystem(this.scene,{lives:()=>this.lives,heal:()=>this._heal()});this.perks.bind(this.track,this.player,this.meteors,this.traffic);   // perks/power-ups (módulo próprio)
+    this.perks=new PerkSystem(this.scene,{lives:()=>this.lives,heal:()=>this._heal()},this.seeds.perks);this.perks.bind(this.track,this.player,this.meteors,this.traffic);   // perks/power-ups (módulo próprio)
     this.meteors.perkAim=(T,k)=>this.perks.aim(T,k);
-    this.scenery=new SceneryManager(this.scene);this.scenery.bind(this.track,this.player);this.scenery.onHit=e=>this._damage('Batida com um prédio');   // cenário: prédios/árvores ao longo da pista (módulo próprio; chunks do world.js)
+    this.scenery=new SceneryManager(this.scene,{seed:this.seeds.scenery});this.scenery.bind(this.track,this.player);this.scenery.onHit=e=>this._damage('Batida com um prédio');   // cenário: prédios/árvores ao longo da pista (módulo próprio; chunks do world.js)
     this.lava=new LavaSystem(this.scene);this.lava.onBurn=()=>this._burn();this.lava.bind(this.track,this.player);   // LAVA: frente que persegue o jogador pela pista (módulo próprio; malha por chunk de 192 m)
     // ESCUDO: o primeiro contato com um obstáculo destrutível (rocha caída, carro NPC, destroço) consome o escudo e destrói o obstáculo, sem dano (a zona letal usa _kill e não passa por aqui)
     const ram=()=>this.state==='running'&&this.perks.ram(),crush=(x,y,z,r)=>this.perks.crush(x,y,z,0xffb060,10);
@@ -69,8 +72,12 @@ export class Game{
     if(d>this.best){this.best=d;try{localStorage.setItem('meteorRunBest',String(d));}catch(e){}}
     this.ui.showOver(d,this.best,cause,Math.round(this.perks.score));
   }
+  _newTrack(){if(globalThis.__LEGACY_MAP)return new Track(7);   // só testes headless antigos (mapa fixo = fixture); o jogo nunca define essa flag
+    return new Track(this.seeds.track,{varyStart:true,safe:220});}   // 220 amostras (~880 m) de largada segura: sem curva fechada, greide suave
   restart(){   // novo mundo do zero (a estrada anterior já foi descartada atrás do carro); o carro e a câmera são reaproveitados
-    this.world.dispose();this.track=new Track(7);this.world=new World(this.scene,this.track);
+    this.seed=randomSeed(this.seed);this.seeds=deriveSeeds(this.seed);setTerrainSeed(globalThis.__LEGACY_MAP?0:this.seeds.terrain);   // NOVA seed a cada partida (nunca igual à anterior)
+    this.meteors.reseed(this.seeds.meteors);this.traffic.reseed(this.seeds.traffic);this.perks.reseed(this.seeds.perks);this.scenery.reseed(this.seeds.scenery);
+    this.world.dispose();this.track=this._newTrack();this.world=new World(this.scene,this.track);
     this.player.track=this.track;this.player.idx=10;this.player.respawn(this.player.idx*STEP);this.player.mesh.visible=true;
     this.rig.init=false;this.meteors.reset();this.meteors.bind(this.track,this.player);this.scenery.reset();this.scenery.bind(this.track,this.player);this.traffic.reset();this.traffic.bind(this.track,this.player,this.meteors);this.perks.reset();this.perks.bind(this.track,this.player,this.meteors,this.traffic);this.lava.reset();this.lava.bind(this.track,this.player);
     this.lives=MAX_LIVES;this.invuln=0;this.state='running';this.ui.setLives(this.lives,MAX_LIVES);this.ui.hideOver();

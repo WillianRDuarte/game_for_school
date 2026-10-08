@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import {surface} from './terrain.js';
 import {mulberry32,clamp,lerp,smoothstep,CAR_SIZE_MUL} from './utils.js';
+import {MeteorDirector} from './director.js';   // ritmo da chuva (calmo/perigo/tempestade/recuperação): decide quando, quantos e onde; este módulo continua criando e simulando os meteoros
 
 export const MAX_METEORS=140;     // meteoros simultâneos no céu (teto absoluto do pool)
 export const SPEED_MUL=.672,RATE_MUL=.72;   // meteoros mais 20 % mais lentos (.84→.672; tempo de queda ÷ SPEED_MUL; trajetória/ângulo iguais) e mais 20 % menos frequentes (.9→.72; intervalo entre spawns ÷ RATE_MUL)
@@ -90,6 +91,7 @@ export class MeteorSystem{
   constructor(scene,seed=(Math.random()*1e9)|0){
     this.scene=scene;this.rng=mulberry32(seed);this.onImpact=null;this.track=null;this.player=null;
     this.stats={spawned:0,impacts:0,hits:0,decals:0,alive:0,rocks:0,rockHits:0,records:0,lethal:0,smashed:0};this.onRockHit=null;this.shieldRam=null;this.onSmash=null;this.npcAim=null;this.perkAim=null;   // npcAim(T,k): gancho opcional do tráfego NPC (ponto de impacto sobre um carro) — null = comportamento original
+    this.director=new MeteorDirector(this,{blastR});this.director.reset((this.rng()*1e9)|0);   // director.enabled=false → agenda/pontaria originais
     this.time=0;this.nextSpawn=0;this.warnings=[];this.craterCells=new Map();this.cellTick=0;this.pending=[];
     this.nActive=0;this.lethalM=null;this.zone={edge:0,out:false,t:0,tick:0,limit:DANGER_DIST,warn:WARN_DIST};   // contador de ativos (sem filter por frame) · meteoro de punição · estado da zona
     // materiais (um de cada; compartilhados)
@@ -146,13 +148,14 @@ export class MeteorSystem{
   }
   // ---- escolha do ponto de impacto: atrás (perseguição), laterais, frente, ao redor do carro, "campo aberto" distante, "no caminho"
   //      e "mirados" que aumentam com a dificuldade. Parte é relativa à ESTRADA (cai na pista/acostamento mesmo com o jogador fora dela).
-  _pickImpact(T,k){
+  _pickImpact(T,k,plan){
     const P=this.player,tr=this.track,rng=this.rng,psi=P.psi,fx=Math.sin(psi),fz=-Math.cos(psi),rx=Math.cos(psi),rz=Math.sin(psi),v=Math.max(P.speed,18);
-    const wFront=lerp(.16,.2,k),wSide=.24,wNear=.1,wFar=.08,wLane=lerp(.06,.1,k),r=rng();
+    let wFront=lerp(.16,.2,k),wSide=.24,wNear=.1,wFar=.08,wLane=lerp(.06,.1,k);const r=rng();
+    if(plan){const w=plan.w;[wFront,wSide,wNear,wFar,wLane]=w;}                                 // Director: pesos da fase (o resto = 'behind')
     let cat=r<wFront?'front':r<wFront+wSide?'side':r<wFront+wSide+wNear?'near':r<wFront+wSide+wNear+wFar?'far':r<wFront+wSide+wNear+wFar+wLane?'lane':'behind';
-    const aimed=this.aimedCount()<2&&P.s>400&&rng()<k*.4;
+    const aimed=plan?(plan.aimP>0&&this.aimedCount()<plan.aimMax&&P.s>400&&rng()<plan.aimP):(this.aimedCount()<2&&P.s>400&&rng()<k*.4);
     let x,z,along,lat;const A=v*T;                                                   // A = quanto o carro ainda anda até o impacto
-    if(aimed){along=A;lat=this._randn()*lerp(30,14,k);cat='aimed';}
+    if(aimed){along=A;lat=this._randn()*lerp(30,14,k)*(plan?plan.aimLat:1);cat='aimed';}
     else if(cat==='behind'){along=A-(50+rng()*(180+k*140));lat=this._randn()*60*(1+k);}
     else if(cat==='side'){along=A-60+rng()*120;lat=(rng()<.5?-1:1)*(30+rng()*170);}
     else if(cat==='near'){const a=rng()*6.2832,rad=40+rng()*110;along=A*.5+Math.cos(a)*rad;lat=Math.sin(a)*rad;}
@@ -186,27 +189,29 @@ export class MeteorSystem{
     best=Math.max(best,w-cur);return best<4;
   }
   aimedCount(){let n=0;for(const m of this.meteors)if(m.active&&m.aimed)n++;return n;}
-  _size(k){
-    const u=this.rng(),pS=lerp(.6,.25,k),pM=lerp(.34,.4,k);let cls,radius;
+  _size(k,plan){
+    const u=this.rng(),pS=plan?plan.pS:lerp(.6,.25,k),pM=plan?plan.pM:lerp(.34,.4,k);let cls,radius;
     if(u<pS){cls=0;radius=1+this.rng()*.8;}else if(u<pS+pM){cls=1;radius=2.2+this.rng()*1.4;}else{cls=2;radius=4+this.rng()*2.5;}
     return {cls,radius,R:radius*(3.4+this.rng()*.9)};                              // raio da cratera ≈ 3,4–4,3× o raio do meteoro (≈4–28 m)
   }
   // ---- spawn
   spawn(){
     const m=this._meteor(),mk=m&&this._marker();if(!m||!mk)return false;
-    const k=this.difficulty(),rng=this.rng,sz=this._size(k),T=lerp(FALL[0],FALL[1],k)*(.85+.3*rng())/SPEED_MUL;     // tempo de queda ≈1,5–3 s (antes 2,6–5,3 s): ~1,8× mais rápido
-    let pt=null;if(this.npcAim){const c=this.npcAim(T,k);if(c&&!this._blocks(c.x,c.z,sz.radius*GS*.95))pt={x:c.x,z:c.z,cat:c.cat};}   // (às vezes mira num NPC; mesma checagem de "nunca fecha a estrada")
-    if(!pt&&this.perkAim){const c=this.perkAim(T,k);if(c&&!this._blocks(c.x,c.z,sz.radius*GS*.95))pt={x:c.x,z:c.z,cat:c.cat};}   // (perk de risco: impacto perto do perk; mesma checagem "nunca fecha a estrada")
-    for(let tries=0;tries<4&&!pt;tries++){const c=this._pickImpact(T,k);if(!this._blocks(c.x,c.z,sz.radius*GS*.95))pt=c;}   // nunca fecha a estrada
+    const D=this.director.enabled?this.director:null,plan=D&&D.cur;   // com Director: toda candidata passa por D.evaluate (espaçamento + cota de ameaças); sem ele, comportamento original
+    const k=this.difficulty(),rng=this.rng,sz=this._size(k,plan),T=lerp(FALL[0],FALL[1],k)*(.85+.3*rng())/SPEED_MUL;     // tempo de queda ≈1,5–3 s (antes 2,6–5,3 s): ~1,8× mais rápido
+    const ok=(c)=>{if(this._blocks(c.x,c.z,sz.radius*GS*.95))return false;if(!D)return true;const e=D.evaluate(c.x,c.z,sz.R,sz.cls,T);if(e<0)return false;c.thr=e;return true;};   // _blocks: nunca fecha a estrada
+    let pt=null;if(this.npcAim)for(let i=plan?plan.npcTries:1;i>0&&!pt;i--){const c=this.npcAim(T,k);if(c&&ok(c))pt={x:c.x,z:c.z,cat:c.cat,thr:c.thr};}   // (às vezes mira num NPC — o Director dá mais tentativas em PERIGO/TEMPESTADE; destroços viram obstáculos)
+    if(!pt&&this.perkAim){const c=this.perkAim(T,k);if(c&&ok(c))pt={x:c.x,z:c.z,cat:c.cat,thr:c.thr};}   // (perk de risco: impacto perto do perk)
+    for(let tries=0;tries<(D?8:4)&&!pt;tries++){const c=this._pickImpact(T,k,plan);if(ok(c))pt=c;}
     if(!pt)return false;
     const g=surface(this.track,pt.x,pt.z,this._g||(this._g={})),iy=g.h;
     const H=360+rng()*260,theta=(8+rng()*30)*Math.PI/180,az=this.player.psi+(rng()-.5)*1.7;   // vem do céu, de trás para a frente (± 49° da direção do carro)
-    this._launch(m,mk,pt.x,iy,pt.z,sz,T,H,theta,az,pt.cat,false);return true;
+    this._launch(m,mk,pt.x,iy,pt.z,sz,T,H,theta,az,pt.cat,false);if(D)D.commit(m,pt.thr);return true;
   }
   // ---- arma um meteoro do pool: nasce a H m de altura e desce em linha reta (visível) até (ix,iy,iz) em T s
   _launch(m,mk,ix,iy,iz,sz,T,H,theta,az,cat,lethal){
     const rng=this.rng,vy=H/T,vh=vy*Math.tan(theta),vx=Math.sin(az)*vh,vz=-Math.cos(az)*vh;
-    Object.assign(m,{active:true,t:0,T,ix,iy,iz,sx:ix-vx*T,sy:iy+H,sz:iz-vz*T,vx,vy:-vy,vz,radius:sz.radius,R:sz.R,cls:sz.cls,cat,aimed:cat==='aimed',lethal,reshape:0,trailT:0,spin:[rng()*2-1,rng()*2-1,rng()*2-1]});
+    Object.assign(m,{active:true,threat:false,t:0,T,ix,iy,iz,sx:ix-vx*T,sy:iy+H,sz:iz-vz*T,vx,vy:-vy,vz,radius:sz.radius,R:sz.R,cls:sz.cls,cat,aimed:cat==='aimed',lethal,reshape:0,trailT:0,spin:[rng()*2-1,rng()*2-1,rng()*2-1]});
     this.nActive++;{const nn=this.track.nearest(ix,iz);m.no=nn?nn.o:0;m.nd=nn?nn.d:1e9;m.nw=nn?nn.w:0;}   // posição relativa à pista (para _blocks)
     m.rock.geometry=this.rockGeos[(rng()*3)|0];m.rock.scale.set(sz.radius,sz.radius*.85,sz.radius*1.1);
     m.glow.scale.set(sz.radius*9+6,sz.radius*9+6,1);
@@ -246,6 +251,7 @@ export class MeteorSystem{
     const dist=Math.hypot(P.x-ix,P.z-iz),hit=lethal||dist<blastR(R);
     this._explode(ix,iy,iz,R,m.cls);const c=this._addCrater(ix,iz,R,m);this._ignite(c);
     this.stats.impacts++;if(hit)this.stats.hits++;if(lethal)this.stats.lethal++;
+    this.director.noteImpact(ix,iz,R);if(hit&&!lethal)this.director.noteHit(3);
     if(this.onImpact)this.onImpact({x:ix,y:iy,z:iz,R,dist,hit,cls:m.cls,lethal});
     this._release(m);
   }
@@ -350,7 +356,7 @@ export class MeteorSystem{
           const lat=(c.x-P.x)*rx+(c.z-P.z)*rz;P.yawRate+=-(lat>=0?1:-1)*clamp(-vn/30,0,.5)*(off>0?1:off<0?-.4:0);   // bater de quina gira o carro
           if(!hit)hit={x:c.x,z:c.z,cls:c.cls,speed:Math.max(0,-vn),rock:c};else hit.speed=Math.max(hit.speed,-vn);
         }}}
-    if(hit){P.mesh.position.x=P.x;P.mesh.position.z=P.z;P.speed=Math.max(0,P.vx*fx+P.vz*fz);this.stats.rockHits++;if(this.onRockHit)this.onRockHit(hit);}
+    if(hit){P.mesh.position.x=P.x;P.mesh.position.z=P.z;P.speed=Math.max(0,P.vx*fx+P.vz*fz);this.stats.rockHits++;this.director.noteHit(1.5);if(this.onRockHit)this.onRockHit(hit);}
     return hit;
   }
   // Há rocha caída SÓLIDA a menos de r m de (x,z)? (tráfego NPC: desvio e colisão; mesma estrutura de células da colisão do jogador)
@@ -425,7 +431,10 @@ export class MeteorSystem{
     if(!this.player)return;this.time+=dt;const k=this.difficulty();
     if(spawn)this._zoneUpdate(dt);                                                   // >200 m da pista → dispara o meteoro de punição
     // agenda de spawn (≈2,5× a anterior): intervalo médio 0,17 s → 0,036 s; simultâneos 36 → 110 (pool até MAX_METEORS=140); sem meteoros nos primeiros 2,5 s / 80 m
-    if(spawn&&this.time>2.5&&this.player.s>80&&this.time>=this.nextSpawn){
+    if(spawn&&this.director.enabled)this.director.update(dt,k);                       // Director: avança a fase (calmo/perigo/tempestade/recuperação)
+    if(spawn&&this.director.enabled&&this.time>2.5&&this.player.s>80&&this.time>=this.nextSpawn){
+      const D=this.director;if(this.nActive<D.cur.maxSim&&this.spawn())this.nextSpawn=this.time+D.nextGap();else this.nextSpawn=this.time+.07;
+    }else if(spawn&&!this.director.enabled&&this.time>2.5&&this.player.s>80&&this.time>=this.nextSpawn){
       const maxSim=Math.round(lerp(SIM[0],SIM[1],k));
       if(this.nActive<maxSim&&this.spawn())this.nextSpawn=this.time+lerp(SPAWN_GAP[0],SPAWN_GAP[1],k)*(.6+.8*this.rng())/RATE_MUL;else this.nextSpawn=this.time+.05;
     }
@@ -450,12 +459,13 @@ export class MeteorSystem{
     this.cellTick-=dt;if(this.cellTick<=0){this.cellTick=.5;this._updateCells();}
     this.stats.alive=this.nActive;this.stats.decals=this.decals.filter(d=>d.crater).length;this.stats.rocks=this.rockMeshes.reduce((a,r)=>a+r.n,0);
   }
+  reseed(seed){this.rng=mulberry32(seed);}   // nova semente da partida (chamar antes de reset())
   reset(){
     for(const m of this.meteors)this._release(m);
     for(const arr of this.craterCells.values())for(const c of arr)this._deactivate(c);
     for(const h of this.heat){h.c=null;h.s.visible=false;}
     this.craterCells.clear();this.pending.length=0;this.fire.clear();this.smoke.clear();this.warnings.length=0;this.time=0;this.nextSpawn=0;
-    this.nActive=0;this.lethalM=null;Object.assign(this.zone,{edge:0,out:false,t:0,tick:0});
+    this.director.reset((this.rng()*1e9)|0);this.nActive=0;this.lethalM=null;Object.assign(this.zone,{edge:0,out:false,t:0,tick:0});
     for(const f of this.flashes)f.visible=false;this.stats.spawned=this.stats.impacts=this.stats.hits=this.stats.rockHits=this.stats.rocks=this.stats.records=this.stats.lethal=this.stats.smashed=0;
   }
 }

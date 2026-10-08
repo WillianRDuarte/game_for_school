@@ -1,3 +1,53 @@
+# Etapa 21: SEED NOVA A CADA PARTIDA (mapa diferente em cada corrida)
+Problema: `Track(7)` fixo, ruído do terreno com grade fixa e seeds fixas de cenário (7), tráfego e perks (sorteadas só uma vez no construtor) → toda partida repetia o mesmo mapa.
+- `js/seeds.js` (NOVO): `randomSeed(avoid)` (30 bits, crypto, nunca igual à anterior), `deriveSeeds(master)` (sub-seeds independentes: track/terrain/scenery/traffic/perks/meteors), `urlSeed()` (`?seed=N` só para reproduzir a PRIMEIRA partida; reinícios sempre sorteiam outra).
+- `js/game.js`: seed mestra no construtor e em `restart()`; `restart()` chama `setTerrainSeed`, `reseed()` de meteoros/tráfego/perks/cenário e cria `Track` novo. `game.seed` / `game.seeds` ficam acessíveis (depuração).
+- `js/utils.js`: `setTerrainSeed(s)` desloca a grade do ruído de gradiente (terreno, relevo, zonas). Seed 0 = mundo original.
+- `js/road.js`: `Track(seed,{varyStart,safe})`. `varyStart`: região inicial sorteada (planície/colinas/vale) e reta inicial de 300–500 m. `safe=220`: nos primeiros ~880 m só manobras com raio ≥ 190 m (sem TIGHT/HAIRPIN/CHICANE/EASE_IN/EASE_OUT) e greide ≤ 7 %. Sem opções = comportamento original (testes antigos).
+- `scenery.js`/`traffic.js`/`perks.js`/`meteors.js`: método `reseed(seed)` (+ `Math.imul` na ZoneMap, idêntico para seeds pequenas).
+- Geração continua por chunks (pista sob demanda, tiles, cenário/tráfego/perks por chunk); nada é gerado inteiro.
+- Teste: `node --import ./tests/register.mjs tests/seed_test.mjs` (GAMES=n).
+
+## Etapa 20 — NPCs mais realistas (só `js/traffic.js`)
+Somente o comportamento dos motoristas NPC mudou; mapa, terreno, estrada, jogador, lava, HUD, meteoros e colisões/destruição seguem iguais.
+- **Personalidade por motorista** (`_persona`): distância de seguimento (`gapT`), antecipação (`ant`), tempo para perceber obstáculo parado (`obsR`), ritmo (`paceA/paceW`), oscilação de direção (`wobA/wobW`), agilidade lateral (`latA`) e vontade de trocar de faixa (`rstl`). ~9 % são "desatentos" (`late`): reação ×1,7 a meteoros, percebem rocha/destroço só no último instante e acabam batendo; ~30 % são "cruzeiro" (estáveis).
+- **Velocidade**: além das velocidades por tipo, cada um acelera e alivia lentamente (soma de 2 senoides, ±0–20 %, períodos de 7–24 s) — `_think`.
+- **Movimento suave** (`_drive`): aceleração proporcional ao erro com variação limitada (jerk 14 m/s³; freada de emergência 70); aceleração lateral 4–7,5 m/s² (só o desvio de emergência segue 16); direção (`yaw`) filtrada; leve inclinação/"sentada" (roll/pitch ≤ 0,03/0,04 rad). Antes: aceleração lateral p99 16 m/s², agora ~6.
+- **Micro-correções**: oscilação lateral lenta (0,05–0,8 m) proporcional à velocidade, sem efeito durante desvio de emergência.
+- **Distância**: folga lateral (`_nudge`, empurra até 1,1 m para longe de quem está colado ao lado) e distância de seguimento individual.
+- **Trocas de faixa espontâneas** (`_wander`): motoristas inquietos mudam de faixa sem trânsito à frente, só se a lateral está livre.
+- **Destroços deslizando** agora atualizam `s/o` e entram na percepção dos outros motoristas (antes só os parados).
+- Custo: ~0,1 ms/frame (mesmo patamar), nenhuma alocação nova por frame.
+- Testes: `traffic_test` TUDO OK (QUICK); turbo_shield, perks, orphan, danger, rocks OK. `vehicles_test` falha só "objetos estabilizam" (já falhava no projeto original). Rodado também em Chromium real (lógica, sem WebGL).
+
+## Etapa 19c — RÉ real no joystick + manche centralizado
+- **Ré** (`js/player.js`, `js/input.js`): joystick ↓ agora engata RÉ de verdade. Andando para frente, ↓ primeiro FREIA (igual ao botão FREIO) e, ao ficar parado (≤ 0,5 m/s), engata a ré (até 13 m/s, `REV_MAX`/`REV_A`). Só o joystick usa isso (`input.reverse`); tecla S e botão FREIO continuam só freando. Soltar → volta ao movimento constante para frente. Em ré a direção inverte como num carro real. Estado explícito `player.revOn`; `player.speed` continua ≥ 0 para o resto do jogo (a ré está em `vx/vz`). Sem ré a trajetória é bit-idêntica à anterior (verificada contra o projeto original).
+- **Posição**: o manche tinha 2 px de borda fora do centro (faltava `box-sizing:border-box`); agora fica exatamente no centro. Base: margem esquerda/inferior iguais às dos botões (testado em 8 tamanhos de tela).
+- Testes: `touch_test.mjs` seção 2d (ré), `touch_browser_test.py` 126/126.
+
+## Etapa 19b — JOYSTICK de 2 eixos (↑ acelera 50 % · ↓ freio/ré · ←→ vira)
+- `js/input.js`: novo `input.stickY` (+ = para cima) e constantes `STICK_GAS=.5`, `STICK_FULL=.6`. `poll()`: `throttle=max(teclado/botão, .5·min(1,↑/.6))` e `brake=max(teclado/botão, min(1,↓/.6))` — usa MAX, não soma: o botão ACELERAR continua com força 1 (mesmo com o joystick ↑).
+- `js/touch.js`: o joystick agora lê X e Y (zona morta por eixo, analógico, manche limitado ao círculo); escreve `input.stick` e `input.stickY`; zera ao soltar/cancelar/perder foco.
+- CSS: setas ▲ ▼ ◀ ▶ desenhadas na base. Nenhuma mudança em `player.js` (o `throttle` já era multiplicador analógico da aceleração).
+- NOTA: o jogo não tem marcha à ré (o Player limita a velocidade a ≥ 0; o botão "FREIO/RÉ" só freia). ↓ no joystick = o mesmo comando do botão FREIO.
+- Testes: `touch_browser_test.py` 118/118; `touch_test.mjs` (seção 2c: 50 %, proporcional, botão inalterado, física).
+
+## Etapa 19 — JOYSTICK VIRTUAL + TELA CHEIA (mobile)
+Só controles/HUD; mapa, terreno, estrada, carros, NPCs, meteoros, lava e gameplay NÃO foram tocados.
+- **Joystick** (`js/touch.js`, `js/input.js`, CSS): as setas ◀ ▶ foram substituídas por um joystick no canto inferior esquerdo. Direção analógica no eixo X (zona morta 12 %, curso total a 80 % do raio) escrita em `input.stick` (-1..1), somada ao teclado em `Input.poll()` e limitada a ±1; o Player continua lendo só `steer`. Volta ao centro ao soltar / touchcancel / perder foco. Um `pointerId` próprio (com `setPointerCapture`): multitouch com ACELERAR/FREIO/TURBO, que seguem iguais. `input.touch` não mudou.
+- **Tela cheia** (`js/fullscreen.js`, `index.html`, `main.js`, CSS): botão pequeno ao lado da distância (`#fs`), Fullscreen API (com prefixo webkit), alterna entrar/sair, acompanha Esc/“voltar” do sistema via `fullscreenchange`, chama `Game.resize()` ao mudar (e de novo após 250 ms por causa do Android). Em tela cheia o HUD respeita `safe-area-inset`. Sem suporte (ex.: iPhone) o botão fica escondido.
+- Testes: `tests/touch_browser_test.py` (Chromium real, 107/107: joystick analógico, multitouch, tela cheia em celular e PC), `tests/touch_test.mjs` (stick ≡ botão antigo; soma com teclado).
+
+# Etapa 18 — METEOR DIRECTOR (ritmo da chuva de meteoros)
+Só o sistema de meteoros. Preservados: trajetórias, indicadores, explosões, crateras/rochas, dano e 3 vidas, meteoro de punição, NPCs, lava, mapa, terreno, estrada, chunks, HUD, perks.
+- NOVO `js/director.js`: fases CALMO → PERIGO → TEMPESTADE → RECUPERAÇÃO (ordem sorteada; tempestade 6–11 s sempre seguida de recuperação de 7–10 s; sem tempestade antes de 450 m). Perfis por fase (cadência, simultâneos, cota de meteoros que AMEAÇAM o jogador, intervalo entre ameaças, espaçamento, pesos das categorias, tamanhos, pontaria, tentativas de mirar em NPCs).
+- Regras: cota de ameaças simultâneas (calmo 1 · perigo 3–4 · tempestade 5–6); nenhuma ameaça na 1ª parte da recuperação nem pousando após o fim de perigo/tempestade; impactos não colados (espaço e tempo); carência de 3 s sem ameaças após dano (1,5 s após bater em rocha); no máx. 1 ameaça grande por vez.
+- Dificuldade pela distância: frequência/duração de perigo e tempestade, tamanho, pontaria, parcela no caminho, mira em NPCs — taxa de impactos k=1/k=0 ≈ ×2 (antes ≈ ×4).
+- `js/meteors.js`: ganchos mínimos (`director`, `spawn` avalia candidatas com `D.evaluate`, `_pickImpact/_size` aceitam o plano da fase, `_impact`/`collide` avisam o Director). `director.enabled=false` restaura o agendador original.
+- `js/ui.js`: a linha de debug mostra a fase atual.
+- Testes: `tests/director_test.mjs` (novo; QUICK=1 encurta); `meteor_test` roda com o Director desligado (mede o agendador antigo); `orphan_test` conta as crateras existentes antes dos 20 s finais.
+- Ajuste fino: `_profile()` e tabela `W` em `director.js`.
+
 # Etapa 17 — ATMOSFERA VULCÂNICA / APOCALÍPTICA (somente visual)
 Sem mudanças de gameplay, física, mapa, estrada, chunks, carros, NPCs, meteoros, lava (lógica), controles ou HUD.
 - NOVO `js/atmosphere.js`: céu em shader (preto-avermelhado → brasa no horizonte, vulcões distantes, brilho na direção da lava); **nuvens de fumaça 3D** (puffs billboard em 1 draw call instanciado, 3 camadas: horizonte/meio/perto, posição real no mundo → paralaxe, passam por cima da pista; ordenadas de trás p/ frente; iluminadas por baixo pela lava); **brasas e cinzas** (2 Points com movimento 100 % no vertex shader); névoa quente; luzes (hemisfério arroxeado + direcional laranja baixa vinda da lava); `gradeMaterial()` (color grading por material); 3 níveis de qualidade com queda automática de FPS.

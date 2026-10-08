@@ -21,6 +21,7 @@ const AHEAD_CH=5;                   // chunks à frente do jogador que recebem t
 const REAR_GAP=[235,300];           // nascimento por trás (m) — dentro dos chunks carregados (2 atrás ≥ 384 m)
 const DESP_AHEAD=1250,DESP_BEHIND=380,WRECK_BEHIND=170;
 const LANES=6,EDGE=2.6,LC_SPEED=3.4,LAT_ACC=16,HORIZON=3.6,SAFE=.9;
+const JERK=14,JERK_HARD=70,TAU=6.2831853;   // variação máx. da aceleração (m/s³): normal / freada de emergência
 const TH_CELL=96,TH_CAP=192,TH_MASK=255;
 const DRIVE=1,WRECK=2;
 const COLORS=[0x2f6fb5,0xdcdcd8,0xe0b02a,0x3f8f4a,0x7d848c,0x8b5a2b,0xe8873a,0x5a3d8f];   // (o jogador é vermelho)
@@ -51,6 +52,7 @@ export class TrafficSystem{
     this.reset();
   }
   bind(track,player,meteors){this.track=track;this.P=player;this.M=meteors;}
+  reseed(seed){this.seed=seed;this.rng=mulberry32(seed);}   // nova semente da partida (chamar antes de reset())
   reset(){
     for(const c of this.pool)this._release(c);
     this.t=0;this.live=true;this.nextC=null;this.first=true;this.rearT=3;this.tbT=0;this.cullT=0;this.drivers=0;this.wreckN=0;this.maxD=MAX_DRIVERS[0];
@@ -92,9 +94,16 @@ export class TrafficSystem{
     this._look(c,M);if(!M){c.body.material=T.dmg?this.mDmg:this.mBody[colorI];c.cab.material=this.mCab;}
     Object.assign(c,{active:true,state:DRIVE,rest:false,dmg:!!T.dmg,type:ti,vd,v:vd*(rear?.98:1),ov:0,acc:rear?6:lerp(3.5,7,rng()),brk:lerp(9,13,rng()),pref:lane,lane,jit:(rng()-.5)*3.2,free:false,freeO:0,evadeT:0,brakeT:0,
       noticed:-1,lcT:this.t+rng()*2,thinkT:rng()*.15,distT:0,react:lerp(T.rc[0],T.rc[1],rng()),agil:lerp(T.ag[0],T.ag[1],rng())*(M?M.agil:1),err:lerp(T.err[0],T.err[1],rng()),
-      attn:T.dmg?.07:lerp(.01,.04,rng()),hp:T.dmg?.55:1,hitT:-9,stuck:0,vCap:vd,evT:-9,smkT:rng(),fireT:0,burn:false,roll:T.dmg?(rng()-.5)*.08:0,pitch:0,s});
-    this._at(s,q);c.w=q.w;c.cv=q.cv;c.h=q.h;const lim=c.w-EDGE;c.o=clamp(laneC(lane,c.w)+c.jit,-lim,lim);c.tgt=c.o;
+      attn:T.dmg?.07:lerp(.01,.04,rng()),hp:T.dmg?.55:1,
+      ...this._persona(T,rng,M),hitT:-9,stuck:0,vCap:vd,evT:-9,smkT:rng(),fireT:0,burn:false,roll:T.dmg?(rng()-.5)*.08:0,pitch:0,s});
+    this._at(s,q);c.w=q.w;c.cv=q.cv;c.h=q.h;const lim=c.w-EDGE;c.o=clamp(laneC(lane,c.w)+c.jit,-lim,lim);c.tgt=c.o;if(c.late)c.react*=1.7;c.rb=c.roll;c.yaw=0;c.a=0;c.nud=c.nudS=0;
     c.x=q.x+Math.cos(q.h)*c.o;c.z=q.z+Math.sin(q.h)*c.o;c.y=q.y+.3;c.psi=q.h;c.pitch=Math.atan(q.sl);c.root.visible=true;this._pose(c);this.drivers++;return c;}
+  _persona(T,rng,M){   // traços individuais: cada motorista reage ao trânsito/ambiente de um jeito próprio
+    const late=!T.dmg&&rng()<.09,calm=!late&&rng()<.3;      // ~10 % desatentos (reagem tarde e podem bater) · ~30 % "cruzeiro" (estáveis)
+    return{late,gapT:late?lerp(.25,.5,rng()):lerp(.35,1.1,rng()),ant:late?lerp(.6,.8,rng()):lerp(.8,1.15,rng()),obsR:late?lerp(1,2.2,rng()):lerp(.1,.45,rng()),
+      paceA:calm?lerp(0,.04,rng()):lerp(.05,.2,rng()),paceW:TAU/lerp(7,24,rng()),paceP:rng()*TAU,paceP2:rng()*TAU,
+      wobA:calm?lerp(.05,.15,rng()):late?lerp(.45,.8,rng()):lerp(.12,.45,rng()),wobW:TAU/lerp(2.5,7,rng()),wobP:rng()*TAU,wobP2:rng()*TAU,
+      latA:lerp(4,7.5,rng()),rstl:calm?0:late?.5:lerp(.1,1,rng()),obsT:-1,nud:0,nudS:0,a:0,yaw:0,rb:0,lastOv:0,rol:0,pit:0};}
   _seed(ch,k,maxD,minAhead){   // tráfego de UM chunk de estrada (determinístico por chunk): 0,9 → 2,0 carros por chunk de 192 m
     const r=mulberry32((this.seed+ch*7919)|0),n=Math.floor(lerp(.9,2,k)+r());
     for(let i=0;i<n&&this.drivers<maxD;i++){
@@ -175,34 +184,58 @@ export class TrafficSystem{
     for(let i=0;i<RG.length;i++){const d=RG[i];if(d>lk)break;this._at(c.s+d,q);if(M.rockNear(q.x+Math.cos(q.h)*oc,q.z+Math.sin(q.h)*oc,c.W+.9))return d-c.L;}return 1e9;}
   _think(c,now){
     const q=this._qc;this._at(c.s+30,q);let kap=Math.abs(q.cv);this._at(c.s+70,q);kap=Math.max(kap,Math.abs(q.cv),Math.abs(c.cv));
-    let vt=Math.min(c.vd,Math.sqrt(8/Math.max(kap,1e-4)));          // reduz nas curvas (≈ 27 m/s num grampo)
+    const pace=1+c.paceA*(.7*Math.sin(c.paceW*now+c.paceP)+.3*Math.sin(c.paceW*2.3*now+c.paceP2)),vdE=c.vd*pace;   // ritmo próprio: acelera e alivia devagar
+    let vt=Math.min(vdE,Math.sqrt(8/Math.max(kap,1e-4)));          // reduz nas curvas (≈ 27 m/s num grampo)
     this._evade(c,now);                                              // 1) meteoros têm prioridade
     if(c.distT>0)c.distT-=.15;else if(this.rng()<c.attn*.15)c.distT=1.2+this.rng()*1.6;   // motorista distraído: ignora carros à frente por instantes
-    const w=c.w,look=25+c.v*1.6;let has=this._lead(c,c.o,look),gap=has?this.ld.gap:1e9,lv=has?this.ld.v:0;
+    const w=c.w,look=(25+c.v*1.6)*c.ant;let has=this._lead(c,c.o,look),gap=has?this.ld.gap:1e9,lv=has?this.ld.v:0;
     const rg=this._rockGap(c,c.o,Math.min(look,70));if(rg<gap){gap=rg;lv=0;has=true;}
     if(has&&c.distT>0&&lv>=1)has=false;
-    if(has){const dg=6+c.v*.5;vt=lv<1?Math.min(vt,Math.sqrt(Math.max(0,18*(gap-5)))):Math.min(vt,lv+(gap-dg)*.6);if(gap<4)vt=0;
+    if(has&&lv<1.5){if(c.obsT<0)c.obsT=now;if(now-c.obsT<c.obsR&&gap>9)has=false;}else c.obsT=-1;   // obstáculo parado (rocha/destroço): percebido após um tempo — os desatentos só no último instante
+    if(has){const dg=6+c.v*c.gapT;vt=lv<1?Math.min(vt,Math.sqrt(Math.max(0,18*(gap-5)))):Math.min(vt,lv+(gap-dg)*.6);if(gap<4)vt=0;
       if(!c.free&&now>=c.lcT&&gap<look*.85&&(lv<1||lv<c.vd-2.5))this._changeLane(c,now,gap,look);}
     else if(!c.free&&c.lane!==c.pref&&now>=c.lcT)this._backToPref(c,now,look);
+    else if(!c.free&&now>=c.lcT&&c.rstl>0&&this.rng()<c.rstl*.0045)this._wander(c,now,look);   // sem trânsito: alguns trocam de faixa por conta própria
     if(now<c.brakeT)vt=Math.min(vt,c.v*.3);
     c.vCap=Math.max(0,vt);const lim=w-EDGE;c.tgt=clamp(c.free?c.freeO:laneC(c.lane,w)+c.jit,-lim,lim);
-    c.stuck=c.v<1.5?c.stuck+.15:0;}
+    c.stuck=c.v<1.5?c.stuck+.15:0;c.nud=c.free?0:this._nudge(c);}
   _changeLane(c,now,gap,look){   // ultrapassagem / desvio de obstáculo parado: tenta faixas vizinhas (esquerda primeiro)
     const w=c.w,L=c.lane,ord=c.vd>=40?[L-1,L+1,L-2,L+2]:[L-1,L+1,L+2,L-2],sloppy=this.rng()<c.err*.4;
     for(const l of ord){if(l<0||l>=LANES)continue;const oc=laneC(l,w)+c.jit;if(!sloppy&&!this._sideClear(c,oc))continue;   // motorista descuidado nem olha o retrovisor
       let g2=this._lead(c,oc,look)?this.ld.gap:1e9;g2=Math.min(g2,this._rockGap(c,oc,Math.min(look,70)));
       if(g2>gap+18||g2>=look){c.lane=l;c.lcT=now+2.4;return;}}}
+  _wander(c,now,look){   // troca de faixa espontânea (sem estar travado): para a faixa vizinha livre, dentro da faixa de velocidade do tipo
+    const T=TYPES[c.type],d=this.rng()<.5?-1:1,l=c.lane+d;if(l<0||l>=LANES||l<T.ln[0]-1||l>T.ln[1]+1)return;
+    const oc=laneC(l,c.w)+c.jit;if(!this._sideClear(c,oc))return;
+    if((this._lead(c,oc,look)&&this.ld.gap<look)||this._rockGap(c,oc,Math.min(look,70))<look)return;
+    c.lane=l;c.pref=l;c.lcT=now+4+this.rng()*4;}
+  _nudge(c){   // mantém folga lateral: quem está colado ao lado empurra o carro suavemente para o outro lado (nunca encosta na borda)
+    const o=this.oth;let n=0;
+    for(let i=0;i<o.length;i++){const b=o[i];if(b===c)continue;const ds=b.s-c.s;if(ds>c.hl+b.hl+7||ds<-(c.hl+b.hl+7))continue;
+      const dl=c.o-b.o,g=Math.abs(dl)-c.hw-b.hw;if(g>1.7)continue;n+=(dl>=0?1:-1)*(1.7-Math.max(g,0))*.5;}
+    return clamp(n,-1.1,1.1);}
   _backToPref(c,now,look){   // depois da ultrapassagem/desvio volta, uma faixa por vez, para a faixa de origem
     const l=c.lane+Math.sign(c.pref-c.lane),oc=laneC(l,c.w)+c.jit;if(!this._sideClear(c,oc))return;
     let g2=this._lead(c,oc,look)?this.ld.gap:1e9;if(g2<look*.8||this._rockGap(c,oc,Math.min(look,70))<look*.8)return;c.lane=l;c.lcT=now+2.2;}
   // ---------------------------------------------------------------- movimento do motorista
   _drive(c,dt){
-    const q=this._qa;c.v+=clamp(Math.min(c.vCap,c.vd)-c.v,-c.brk*dt,c.acc*dt);
-    const lm=c.free?c.agil:LC_SPEED,des=clamp((c.tgt-c.o)*2.2,-lm,lm);c.ov+=clamp(des-c.ov,-LAT_ACC*dt,LAT_ACC*dt);
-    let o=c.o+c.ov*dt;const lim=c.w-EDGE;if(o>lim){o=lim;if(c.ov>0)c.ov=0;}else if(o<-lim){o=-lim;if(c.ov<0)c.ov=0;}
+    const q=this._qa,now=this.t;
+    // longitudinal: aceleração proporcional ao erro de velocidade, com variação limitada (jerk) → arranca/alivia sem trancos; freada de emergência sobe rápido
+    const err=Math.min(c.vCap,c.vd*(1+c.paceA))-c.v,ad=clamp(err*(err<0?8:1.1),-c.brk,c.acc),jm=(ad<-3.5||ad<c.a-3?JERK_HARD:JERK)*dt;
+    c.a+=clamp(ad-c.a,-jm,jm);let nv=c.v+c.a*dt;if((err>=0&&nv>c.v+err)||(err<0&&nv<c.v+err)){nv=c.v+err;c.a*=.5;}c.v=Math.max(0,nv);
+    // lateral: alvo da faixa + oscilação lenta própria (micro-correções) + folga dos vizinhos; aceleração lateral limitada (suave, só o desvio de emergência é rápido)
+    let tg=c.tgt;if(!c.free){c.nudS+=(c.nud-c.nudS)*(1-Math.exp(-3*dt));
+      tg+=c.nudS+c.wobA*clamp(c.v/14,0,1)*(.7*Math.sin(c.wobW*now+c.wobP)+.3*Math.sin(c.wobW*2.1*now+c.wobP2));}
+    const lim=c.w-EDGE;tg=clamp(tg,-lim,lim);
+    const lm=c.free?c.agil:LC_SPEED,la=c.free?LAT_ACC:c.latA,des=clamp((tg-c.o)*2.2,-lm,lm);c.ov+=clamp(des-c.ov,-la*dt,la*dt);
+    let o=c.o+c.ov*dt;if(o>lim){o=lim;if(c.ov>0)c.ov=0;}else if(o<-lim){o=-lim;if(c.ov<0)c.ov=0;}
     c.o=o;c.s+=c.v*dt/(1-clamp(o*c.cv,-.5,.5));   // pista curva: faixa interna é mais curta
     this._at(c.s,q);c.w=q.w;c.cv=q.cv;c.h=q.h;c.x=q.x+Math.cos(q.h)*o;c.z=q.z+Math.sin(q.h)*o;c.y=q.y+.3;
-    c.psi=q.h+Math.atan2(c.ov,Math.max(c.v,6));c.pitch=Math.atan(q.sl);this._pose(c);}
+    if(dt>0){   // direção/atitude suavizadas: o carro gira, inclina e "senta" aos poucos (nada muda de pose instantaneamente)
+      c.yaw+=(Math.atan2(c.ov,Math.max(c.v,6))-c.yaw)*(1-Math.exp(-9*dt));
+      const la2=(c.ov-c.lastOv)/dt;c.lastOv=c.ov;const k=1-Math.exp(-6*dt);
+      c.rol+=(clamp(la2*.0025,-.03,.03)-c.rol)*k;c.pit+=(clamp(c.a*.004,-.04,.04)-c.pit)*k;}
+    c.psi=q.h+c.yaw;c.pitch=Math.atan(q.sl)+c.pit;c.roll=c.rb+c.rol;this._pose(c);}
   _puff(c,dt,strong){   // fumaça/fogo: reutiliza os pools de partículas do sistema de meteoros (só perto do jogador)
     c.smkT-=dt;if(c.smkT>0)return;c.smkT=(strong?.28:.45)+this.rng()*.25;const P=this.P;if(Math.abs(c.x-P.x)>260||Math.abs(c.z-P.z)>260)return;const r=this.rng.bind(this),M=this.M;
     M.smoke.emit(c.x,c.y+1.3,c.z,(r()-.5)*1.5,2.5+r()*2,(r()-.5)*1.5,2.2+r(),c.W*(1.2+r()*.6),2.2,-.4,.5,[.2,.19,.18,.55],[.4,.4,.4,0]);
@@ -234,6 +267,7 @@ export class TrafficSystem{
     c.age+=dt;if(c.fireT>0){c.fireT-=dt;this._puff(c,dt,c.burn);}if(c.rest)return;
     const sp=Math.hypot(c.vx,c.vz);if(sp>0){const k=Math.max(0,sp-14*dt)/sp;c.vx*=k;c.vz*=k;}
     c.x+=c.vx*dt;c.z+=c.vz*dt;c.psi+=c.wz*dt;c.wz*=Math.exp(-1.7*dt);
+    {const dx=c.x-c.x0,dz=c.z-c.z0;c.s=c.s0+dx*Math.sin(c.h0)-dz*Math.cos(c.h0);c.o=c.o0+dx*Math.cos(c.h0)+dz*Math.sin(c.h0);}   // posição em coordenadas de estrada (outros motoristas enxergam o destroço deslizando)
     const rk=this.M.rockNear(c.x,c.z,c.W+.4);   // desliza e esbarra nas rochas dos meteoros
     if(rk){const dx=c.x-rk.x,dz=c.z-rk.z,d=Math.hypot(dx,dz)||1,nx=dx/d,nz=dz/d,pen=Math.max(0,rk.rr+c.W+.4-d);c.x+=nx*pen;c.z+=nz*pen;const vn=c.vx*nx+c.vz*nz;if(vn<0){c.vx-=1.5*vn*nx;c.vz-=1.5*vn*nz;}}
     c.roll+=(c.rollG-c.roll)*(1-Math.exp(-6*dt));
@@ -309,7 +343,7 @@ export class TrafficSystem{
     if(!this.P||!this.track)return;dt=Math.min(dt,.05);this.t+=dt;this.live=live;const now=this.t;
     if(live){this._player();this.tbT-=dt;if(this.tbT<=0){this.tbT=.1;this._buildThreats();}}
     const oth=this.oth;oth.length=0;let dr=0,wr=0;
-    for(const c of this.pool){if(!c.active)continue;if(c.state===DRIVE){dr++;oth.push(c);}else{wr++;if(c.rest)oth.push(c);}}
+    for(const c of this.pool){if(!c.active)continue;if(c.state===DRIVE){dr++;oth.push(c);}else{wr++;oth.push(c);}}
     this.drivers=dr;this.wreckN=wr;if(live&&this.pOn&&!(this.P.phase>0))oth.push(this.pl);
     if(live&&!this.modelsPending)this._spawnTick(dt);   // (espera o GLB carregar — ou falhar — para não nascer carro-caixa e trocar depois)
     for(const c of this.pool){if(!c.active)continue;

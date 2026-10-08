@@ -10,3 +10,6 @@ const L={};globalThis.addEventListener=(t,f)=>{(L[t]=L[t]||[]).push(f);};globalT
 globalThis.innerWidth=1280;globalThis.innerHeight=720;globalThis.devicePixelRatio=1;
 globalThis.localStorage={_d:{},getItem(k){return this._d[k]??null;},setItem(k,v){this._d[k]=v;}};
 globalThis.__els=els;
+
+// Testes antigos assumem o mapa fixo Track(7) (posições de curvas/grampos); seed_test.mjs desliga a flag e testa as seeds por partida.
+globalThis.__LEGACY_MAP=true;

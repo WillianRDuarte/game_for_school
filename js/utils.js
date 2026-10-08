@@ -10,7 +10,11 @@ export function mulberry32(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a
 // Ruído de gradiente (Perlin 2D) -> ~[-1,1]. Sem os artefatos alinhados à grade do value-noise.
 const GX=new Float32Array(256),GZ=new Float32Array(256);
 for(let i=0;i<256;i++){const a=i/256*Math.PI*2;GX[i]=Math.cos(a);GZ[i]=Math.sin(a);}
-const gi=(x,z)=>(hash(x,z)*256)|0;
+// Semente do TERRENO: desloca a grade do ruído de gradiente (gnoise2/gfbm/ridged) por um offset inteiro derivado da semente.
+// Seed 0 = offset 0 = exatamente o mundo original (testes antigos continuam idênticos). Estado global: só existe um mundo por vez.
+let OX=0,OZ=0;
+export function setTerrainSeed(s){s=s|0;if(!s){OX=OZ=0;return;}const r=mulberry32(s^0x7e44a1);OX=Math.floor(r()*80000)-40000;OZ=Math.floor(r()*80000)-40000;}
+const gi=(x,z)=>(hash(x+OX,z+OZ)*256)|0;
 export function gnoise2(x,z){
   const xi=Math.floor(x),zi=Math.floor(z),xf=x-xi,zf=z-zi;
   const u=xf*xf*xf*(xf*(xf*6-15)+10),v=zf*zf*zf*(zf*(zf*6-15)+10);

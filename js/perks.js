@@ -50,6 +50,7 @@ export class PerkSystem{
   bind(track,player,meteors,traffic){this.track=track;this.P=player;this.M=meteors;this.T=traffic;
     if(!this.attached||this.attached!==player){player.mesh.add(...this.flames,this.bubble);this.attached=player;this._pm=[player.mesh.children[0].material,player.mesh.children[1].material];
       this._pm0=this._pm.map(m=>({t:m.transparent,o:m.opacity,e:m.emissive?m.emissive.getHex?m.emissive.getHex():0:0}));}}
+  reseed(seed){this.seed=seed;}   // nova semente da partida (chamar antes de reset())
   reset(){
     for(const t of TYPES)for(const p of this.pools[t])this._release(p);
     this.fx={shield:0,phase:0,overdrive:0};this.turbo={q:0,on:false,ti:0,empty:0};this.ramT=0;this.t=0;this.nextC=null;this.lastS={};for(const t of TYPES)this.lastS[t]=-1e9;this.nAct=0;

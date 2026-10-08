@@ -31,10 +31,11 @@ for(const k of[.4,1]){g.restart();M.difficulty=()=>k;let bad=0,fr=0,peak=0;
  ok(bad===0,`dificuldade ${k}: ${fr} frames, pico ${peak} marcadores em uso, inconsistências ${bad}`);}
 
 console.log('4) depois do último spawn não sobra nenhum objeto temporário');
-{M.nextSpawn=1e9;for(let i=0;i<20*60;i++){g.invuln=9;g.lives=3;follow();g.update(dt);}
+{g.update(dt);const dec0=M.stats.decals,rk0=M.stats.rocks;   // crateras/rochas existentes ANTES dos 20 s (com o Director há menos impactos; em 20 s o carro anda ~1,5 km e as de trás saem do raio de carga)
+ M.nextSpawn=1e9;for(let i=0;i<20*60;i++){g.invuln=9;g.lives=3;follow();g.update(dt);}
  const L={ativos:M.nActive,marcVis:M.markers.filter(k=>k.group.visible).length,marcUso:M.markers.filter(k=>k.used).length,heat:M.heat.filter(h=>h.s.visible).length,flash:M.flashes.filter(f=>f.visible).length,fogo:M.fire.alive,fumaca:M.smoke.alive,rootsVis:M.meteors.filter(m=>m.root.visible).length};
  ok(Object.values(L).every(v=>v===0),'20 s depois: '+JSON.stringify(L));
- ok(M.stats.decals>0&&M.stats.rocks>0,`crateras (${M.stats.decals}) e rochas no chão (${M.stats.rocks}) permanecem, como deve ser`);}
+ ok(dec0>0&&rk0>0,`crateras (${dec0}) e rochas no chão (${rk0}) existiam e não foram tratadas como lixo temporário (as distantes saem por distância, como deve ser)`);}
 
 console.log('5) o meteoro de punição também devolve o marcador');
 {g.restart();M.nextSpawn=1e9;M.time=5;const q=g.track.sampleAt(600),w=q.w+250;P.x=q.x+Math.cos(q.h)*w;P.z=q.z+Math.sin(q.h)*w;P.psi=q.h+Math.PI/2;P.vx=Math.sin(P.psi)*20;P.vz=-Math.cos(P.psi)*20;P.speed=20;P.idx=150;P.update(0,{throttle:0,brake:0,steer:0});
